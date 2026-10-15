@@ -40,7 +40,7 @@
 7. **验收截图必须来自真机**（`adb exec-out screencap -p`），不使用模拟器；暗色与 1.3× 字号场景在真机上切换后截图。
 8. `_ref/`、`.research/`、`.parts/`、`build/`、`local.properties` 一律不入库。
 9. **横竖屏用系统自动旋转，且 `screenOrientation` 必须是 `unspecified`**（不要用 `fullSensor`）。实测 `fullSensor` 会在启动期发生方向抖动，TextureView 重建 Surface 而渲染器仍绑旧 Surface，整片预览透明（像素为背景色而非黑帧）；且它忽略用户的旋转锁定，语义也不符。
-10. **旋转后只刷新渲染尺寸，绝不可重注册相机**：`ICamera.setRenderSize` 内部是 `mSizeChangedFuture?.set(...)`（`MultiCameraClient.kt:592`），该一次性 Future 在相机打开阶段已消费，二次设置无效 → GL viewport 停在旧尺寸。而 `unRegisterMultiCamera()+registerMultiCamera()` 会走 `onAttachDev → requestPermission`，`USBMonitor` 在 Android 9+ 会**先撤销已有权限再申请** → 必然弹授权框（实测）。正解：反射调用公开的 `RenderManager.setRenderSize(w,h)`，它只投递 `MSG_GL_CHANGED_SIZE` 更新 `mScreenRender/mCameraRender` 尺寸（`RenderManager.kt:130-139`），完全不碰 USB。实测旋转期间权限日志 0 条、横屏内容框 1917×1056。
+10. **旋转后只刷新渲染尺寸，绝不可重注册相机**：`ICamera.setRenderSize` 内部是 `mSizeChangedFuture?.set(...)`（`MultiCameraClient.kt:592`），该一次性 Future 在相机打开阶段已消费，二次设置无效 → GL viewport 停在旧尺寸。而 `unRegisterMultiCamera()+registerMultiCamera()` 会重建 `MultiCameraClient`/`USBMonitor` 并重走 attach 流程，且 `unRegisterMultiCamera` **不复位 `mRequestPermission`**（`CameraActivity.kt:163-171`），会引入新的死锁路径。（**订正**：此处曾写「USBMonitor 会先撤销已有权限再申请 → 必然弹授权框」，与代码不符——`resetDevicePermission`（`USBMonitor.java:712-750`）只清本库缓存 + 关 ctrlBlock，**不触碰系统级授权**；当时弹窗是因为重装 APK 后系统权限本就不存在。）正解：反射调用公开的 `RenderManager.setRenderSize(w,h)`，它只投递 `MSG_GL_CHANGED_SIZE` 更新 `mScreenRender/mCameraRender` 尺寸（`RenderManager.kt:130-139`），完全不碰 USB。实测旋转期间权限日志 0 条、横屏内容框 1917×1056。
 11. **挖孔（displayCutout）避让只在横屏生效**：竖屏时挖孔位于顶部状态栏区域，不做横向避让。
 12. **横屏是沉浸态**：隐藏应用控件**与**系统状态栏（`WindowInsetsControllerCompat.hide(systemBars)`）；点击屏幕唤出控件并显示系统栏，5 秒后再次隐藏。竖屏始终显示系统栏。
 13. **分辨率只允许用户显式选择**（BottomSheet 列表），不做任何自动切换或轮换。
