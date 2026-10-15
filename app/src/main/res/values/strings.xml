@@ -38,22 +38,16 @@
     <!-- 控制条 -->
     <string name="cd_device">选择设备</string>
     <string name="cd_resolution">切换分辨率</string>
-    <string name="cd_rotate">旋转画面</string>
-    <string name="cd_mirror">镜像画面</string>
     <string name="cd_keep_screen_on">屏幕常亮</string>
     <string name="cd_more">更多设置</string>
 
     <!-- 抽屉 -->
     <string name="sheet_title_device">设备</string>
-    <string name="sheet_title_resolution">分辨率</string>
-    <string name="sheet_title_transform">旋转与镜像</string>
+    <string name="sheet_title_resolution">选择分辨率</string>
+    <string name="sheet_resolution_hint">当前设备支持以下预览尺寸；选中后立即切换。</string>
+    <string name="snack_resolution_unavailable">未获取到设备支持的分辨率列表</string>
     <string name="sheet_title_display">显示</string>
     <string name="sheet_title_about">关于</string>
-    <string name="sheet_rotate_0">0°</string>
-    <string name="sheet_rotate_90">90°</string>
-    <string name="sheet_rotate_180">180°</string>
-    <string name="sheet_rotate_270">270°</string>
-    <string name="sheet_mirror">水平镜像</string>
     <string name="sheet_keep_screen_on">预览时保持屏幕常亮</string>
     <string name="sheet_no_device">无可用设备</string>
     <string name="sheet_about_text">基于 Apache-2.0 的 AndroidUSBCamera (ernestp fork 3.6.0) 构建。仅在本机使用，不采集、不上传任何画面。</string>

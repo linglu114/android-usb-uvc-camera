@@ -185,7 +185,7 @@
             android:textColor="@color/hud_on_surface" />
     </LinearLayout>
 
-    <!-- 底部控制条：6 个 48dp 目标，单行 -->
+    <!-- 底部控制条：每个 48dp 触控目标；横竖屏由系统自动旋转，应用内不再提供画面旋转 -->
     <LinearLayout
         android:id="@+id/control_bar"
         android:layout_width="match_parent"
@@ -209,20 +209,6 @@
             style="@style/Widget.UsbCam.IconButton"
             android:contentDescription="@string/cd_resolution"
             app:icon="@drawable/ic_resolution"
-            app:iconTint="@color/hud_on_surface" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_rotate"
-            style="@style/Widget.UsbCam.IconButton"
-            android:contentDescription="@string/cd_rotate"
-            app:icon="@drawable/ic_rotate"
-            app:iconTint="@color/hud_on_surface" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_mirror"
-            style="@style/Widget.UsbCam.IconButton"
-            android:contentDescription="@string/cd_mirror"
-            app:icon="@drawable/ic_mirror"
             app:iconTint="@color/hud_on_surface" />
 
         <com.google.android.material.button.MaterialButton

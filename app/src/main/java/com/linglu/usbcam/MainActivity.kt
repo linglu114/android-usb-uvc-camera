@@ -1,7 +1,12 @@
 package com.linglu.usbcam
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -11,17 +16,17 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
-import android.hardware.usb.UsbManager
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updatePadding
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
 import com.jiangdg.ausbc.MultiCameraClient
 import com.jiangdg.ausbc.base.CameraActivity
@@ -34,40 +39,42 @@ import com.jiangdg.ausbc.widget.IAspectRatio
 import com.linglu.usbcam.databinding.ActivityMainBinding
 
 /**
- * 单屏预览：USB 摄像头 / HDMI 采集卡的画面显示。
+ * 单屏预览：USB 摄像头 / HDMI 采集卡。
  *
- * 设计约束（AGENT.md 与 docs/spec/usbcam-v1.md）：
- * - 触控目标 >= 48dp；文案用 sp 随系统字号缩放
- * - 控件浮于画面之上、不抢焦点；唯一强调色为锈红
- * - 空 / 加载 / 错误三态齐备，错误文案点名问题与恢复动作
- *
- * 状态机说明：切换分辨率会让库先 CLOSED 再 OPENED。若 CLOSED 直接落到「空状态」，
- * 用户会看到画面闪烁一下空状态指引，因此用 [changingResolution] 区分这次关闭是否由
- * 主动切换引起：是则维持加载态，否则才认为设备真的断开。
+ * 交互约定（用户已确认）：
+ * - 画面朝向交给系统自动旋转，应用内不提供旋转/镜像控件
+ * - 分辨率只在用户显式选择时切换，不做任何自动切换或轮换
+ * - 横屏进入即隐藏全部控件（沉浸），点击屏幕切换，恢复显示后自动再隐藏
+ * - 刘海/挖孔：画面保持沉浸延伸，关键控件用 displayCutout 安全边衬区避开
+ *   （依据 developer.android.com/develop/ui/views/layout/display-cutout 最佳实践）
  */
 class MainActivity : CameraActivity() {
 
     private var binding: ActivityMainBinding? = null
     private var cameraView: AspectRatioTextureView? = null
 
-    private var rotateType: RotateType = RotateType.ANGLE_0
     private var keepScreenOn: Boolean = true
     private var everOpened: Boolean = false
     private var changingResolution: Boolean = false
     private var currentSizeIndex: Int = 0
     private val previewSizes: MutableList<PreviewSize> = mutableListOf()
-    private val mainHandler = Handler(Looper.getMainLooper())
 
-    /** 系统 UsbManager：用于真实查询某设备是否已授权（不再靠猜测） */
+    private var isLandscape: Boolean = false
+    private var uiVisible: Boolean = true
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val autoHideRunnable = Runnable { if (isLandscape) setUiVisible(false) }
+
+    /** 系统 UsbManager：用于真实查询设备是否已授权（不靠猜测） */
     private val usbManager: UsbManager? by lazy {
         getSystemService(Context.USB_SERVICE) as? UsbManager
     }
 
     /**
-     * CAMERA 运行时权限。
-     * 保留它不是为了用内置相机，而是因为部分 ROM（本机 ColorOS 15 实测）在应用未持有
-     * CAMERA 权限时会让 UsbManager.requestPermission 直接被拒且不弹授权对话框。
-     * 依据：StackOverflow 61542540 高票答案的实测结论。
+     * CAMERA 运行时权限：保留它不是为了用内置相机，
+     * 而是因为部分 ROM（本机 ColorOS 15 实测）在缺少 CAMERA 时
+     * 会让 UsbManager.requestPermission 直接被拒且不弹授权框。
+     * 依据：StackOverflow 61542540 + 本机复现。
      */
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -96,10 +103,6 @@ class MainActivity : CameraActivity() {
 
     override fun getGravity(): Int = Gravity.CENTER
 
-    /**
-     * 请求 1280x720 + MJPEG（采集卡对该格式支持最好）。
-     * 设备不支持时 AUSBC 内部会自动回退，这里不再叠加第二层回退逻辑。
-     */
     override fun getCameraRequest(): CameraRequest = CameraRequest.Builder()
         .setPreviewWidth(1280)
         .setPreviewHeight(720)
@@ -115,29 +118,107 @@ class MainActivity : CameraActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         applyInsets()
         applyKeepScreenOn()
     }
 
-    /** 先拿 CAMERA 权限，否则部分 ROM 不会给出 USB 授权对话框 */
-    private fun ensureCameraPermission() {
-        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            requestUsbPermission()
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+        // 方向变化后强制重新测量：Activity 声明了 configChanges 不会重建，
+        // 而 AspectRatioTextureView 只在被重新测量时才按新屏幕计算尺寸，
+        // 否则会停在旋转前的 1080x607（实测横屏画面未放大）。
+        binding?.cameraContainer?.requestLayout()
+        cameraView?.post {
+            val v = cameraView ?: return@post
+            if (v.width <= 0 || v.height <= 0) return@post
+            refreshRenderSize(v.width, v.height)
         }
+        cameraView?.requestLayout()
+        applyOrientationUi()
     }
 
-    /** 内容避开状态栏与手势条（edge-to-edge + window insets） */
+    override fun onResume() {
+        super.onResume()
+        applyOrientationUi()
+    }
+
+    /**
+     * 内容遵守系统栏与刘海安全区。
+     * 横屏时挖孔位于屏幕短边（左侧或右侧），给控件加左右内边距避免被遮挡；
+     * 预览画面本身保持延伸（沉浸式），不额外裁切。
+     */
+    /**
+     * 只把新的表面尺寸告知渲染器，不触碰 USB 授权链路。
+     *
+     * 为什么不用公开 API：
+     * - ICamera.setRenderSize 内部是 mSizeChangedFuture?.set(...)（MultiCameraClient.kt:592），
+     *   该 SettableFuture 在相机打开阶段已被消费，二次 set 无效，GL viewport 会停在旧尺寸。
+     * - 重注册相机（unRegisterMultiCamera + registerMultiCamera）会走 onAttachDev →
+     *   requestPermission，而 USBMonitor 在 Android 9+ 会先撤销已有权限再申请，必然弹授权框。
+     * - RenderManager.setRenderSize 是公开方法，只投递 MSG_GL_CHANGED_SIZE，更新
+     *   mScreenRender/mCameraRender 的尺寸与 buffer（RenderManager.kt:130-139），不涉 USB。
+     */
+    private fun refreshRenderSize(width: Int, height: Int): Boolean {
+        val camera = getCurrentCamera() ?: return false
+        var cls: Class<*>? = camera.javaClass
+        while (cls != null && cls != Any::class.java) {
+            try {
+                val field = cls.getDeclaredField("mRenderManager")
+                field.isAccessible = true
+                val renderManager = field.get(camera) ?: return false
+                renderManager.javaClass.getMethod(
+                    "setRenderSize",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType
+                ).invoke(renderManager, width, height)
+                return true
+            } catch (e: NoSuchFieldException) {
+                cls = cls.superclass
+            } catch (e: Exception) {
+                return false
+            }
+        }
+        return false
+    }
+
     private fun applyInsets() {
         val b = binding ?: return
+        val basePad = resources.getDimensionPixelSize(R.dimen.screen_padding)
         ViewCompat.setOnApplyWindowInsetsListener(b.root) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            b.topBar.updatePadding(top = bars.top)
-            b.controlBar.updatePadding(bottom = bars.bottom)
+            // 挖孔避让仅在横屏生效：竖屏时挖孔位于顶部状态栏区域，无需横向避让
+            val cutL = if (isLandscape) insets.getInsets(WindowInsetsCompat.Type.displayCutout()).left else 0
+            val cutR = if (isLandscape) insets.getInsets(WindowInsetsCompat.Type.displayCutout()).right else 0
+            b.topBar.updatePadding(
+                top = bars.top,
+                left = cutL,
+                right = basePad + cutR
+            )
+            b.controlBar.updatePadding(
+                bottom = bars.bottom,
+                left = cutL + 8,
+                right = basePad + cutR
+            )
+            b.statusRow.updatePadding(left = basePad + cutL, right = basePad + cutR)
             insets
+        }
+        ViewCompat.requestApplyInsets(b.root)
+    }
+
+    /**
+     * 系统栏显隐。横屏沉浸时隐藏状态栏与导航栏，并允许边缘滑动临时唤出；
+     * 竖屏或用户唤出控件时恢复显示。
+     */
+    private fun setSystemBarsVisible(visible: Boolean) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        if (visible) {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
         }
     }
 
@@ -153,46 +234,46 @@ class MainActivity : CameraActivity() {
     override fun initData() {
         val b = binding ?: return
         b.btnExit.setOnClickListener { finish() }
-        // 首版不做镜像（AUSBC 无水平翻转公开 API），隐藏按钮而不是留一个无效控件
-        b.btnMirror.visibility = View.GONE
         b.btnKeepOn.setOnClickListener {
             keepScreenOn = !keepScreenOn
             applyKeepScreenOn()
         }
-        b.btnRotate.setOnClickListener {
-            rotateType = nextRotate(rotateType)
-            applyRotate(rotateType)
-        }
-        b.btnResolution.setOnClickListener { cycleResolution() }
+        b.btnResolution.setOnClickListener { showResolutionSheet() }
+        b.btnDevice.setOnClickListener { showSummary() }
         b.btnMore.setOnClickListener { showSummary() }
 
-        // 空状态的出口：设备已插入但未授权时，用户可主动触发系统授权对话框
+        // 空状态的出口：设备已插入但未授权时，用户可主动触发系统授权
         b.btnRequestPermission.setOnClickListener { requestUsbPermission() }
-        b.btnRescan.setOnClickListener {
-            refreshEmptyState()
-            snack(getString(R.string.action_rescan) + "完成")
-        }
+        b.btnRescan.setOnClickListener { refreshEmptyState() }
 
-        // 启动即进入加载态（等待授权/打开），随后由 onCameraState 驱动
+        // 横屏沉浸：点击屏幕切换控件显隐（按钮会消费自身点击，不会误触）
+        b.root.setOnClickListener { toggleUi() }
+
         refreshEmptyState()
         showState(UiState.Loading)
-
-        // 稍候再发起授权：USBMonitor 在注册后约 1s 才完成首次设备枚举
+        applyOrientationUi()
         mainHandler.postDelayed({ ensureCameraPermission() }, STARTUP_PERMISSION_DELAY_MS)
     }
 
-    /** 已插入但未授权的 USB 设备（UVC 设备在无权限时也能枚举到） */
+    // ---------------- 授权 ----------------
+
+    private fun ensureCameraPermission() {
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            requestUsbPermission()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    /** 已插入的 USB 设备（UVC 设备在无权限时也能枚举到） */
     private fun pendingDevices(): List<UsbDevice> = try {
         getDeviceList()?.toList().orEmpty()
     } catch (e: Exception) {
         emptyList()
     }
 
-    /**
-     * 让用户主动触发一次系统 USB 授权。
-     * 某些 ROM（实测 ColorOS 15 / Android 15）在应用启动时被动的授权请求不会拉起弹窗，
-     * 这里提供显式入口；若确实没有弹窗，说明请求被 ROM 侧策略丢弃，需要走系统设置授权。
-     */
     private fun requestUsbPermission() {
         val devices = pendingDevices()
         if (devices.isEmpty()) {
@@ -201,7 +282,6 @@ class MainActivity : CameraActivity() {
         }
         val denied = devices.filter { usbManager?.hasPermission(it) != true }
         if (denied.isEmpty()) {
-            // 权限已授予：系统不会再弹对话框，库会在设备 attach 时自行打开相机
             snack(getString(R.string.snack_permission_already))
             return
         }
@@ -211,15 +291,12 @@ class MainActivity : CameraActivity() {
         } catch (e: Exception) {
             snack(e.localizedMessage ?: e.javaClass.simpleName)
         }
-        // 部分 ROM（实测 ColorOS 15 / Android 15）的授权请求可能既不弹窗也不回调，
-        // 这里复查一次系统权限状态，保证界面不会永远停在加载态。
         mainHandler.postDelayed({ onPermissionChecked() }, PERMISSION_RECHECK_DELAY_MS)
     }
 
     /**
-     * 授权复查：用系统 UsbManager 真实查询权限。
-     * - 仍有设备未授权 → 落空状态并给出授权入口
-     * - 已全部授权 → 保持加载态，交给 onCameraState(OPENED) 驱动
+     * 授权复查：用系统 UsbManager 真实查询，而不是猜测。
+     * 只有确实仍有设备未授权时才落空状态；已授权则保持加载态交给 OPENED。
      */
     private fun onPermissionChecked() {
         if (binding == null) return
@@ -237,79 +314,109 @@ class MainActivity : CameraActivity() {
         }
     }
 
+    // ---------------- 横屏沉浸 ----------------
 
-    /**
-     * 空状态文案由「设备存在性 + 实际授权状态」共同决定。
-     * 用 UsbManager.hasPermission 做真实判定，避免把「已授权、正在打开」误报成未授权。
-     */
-    @SuppressLint("SetTextI18n")
-    private fun refreshEmptyState() {
+    private fun applyOrientationUi() {
+        if (isLandscape) {
+            setUiVisible(false)
+        } else {
+            mainHandler.removeCallbacks(autoHideRunnable)
+            setUiVisible(true)
+        }
+    }
+
+    private fun toggleUi() {
+        if (!isLandscape) return
+        setUiVisible(!uiVisible)
+        if (uiVisible) scheduleAutoHide()
+    }
+
+    private fun setUiVisible(visible: Boolean) {
+        uiVisible = visible
         val b = binding ?: return
-        val devices = pendingDevices()
-        val denied = devices.filter { usbManager?.hasPermission(it) != true }
-        when {
-            devices.isEmpty() -> {
-                b.tvEmptyTitle.setText(R.string.empty_title)
-                b.tvEmptySteps.setText(R.string.empty_steps_default)
-                b.btnRequestPermission.visibility = View.GONE
-            }
-            denied.isNotEmpty() -> {
-                val names = denied.joinToString(", ") { deviceLabel(it) }
-                b.tvEmptyTitle.setText(R.string.empty_title_detected)
-                b.tvEmptySteps.text = getString(R.string.empty_detected_fmt, names)
-                b.btnRequestPermission.visibility = View.VISIBLE
-            }
-            else -> {
-                // 设备已授权，只是相机尚未打开：这不是「未授权」，不要误导用户
-                b.tvEmptyTitle.setText(R.string.empty_title_opening)
-                b.tvEmptySteps.setText(R.string.empty_steps_opening)
-                b.btnRequestPermission.visibility = View.GONE
-            }
-        }
+        val state = if (visible) View.VISIBLE else View.GONE
+        // 系统状态栏/导航栏：仅横屏沉浸时隐藏；竖屏始终保留
+        setSystemBarsVisible(visible || !isLandscape)
+        // 方向变化时重新分派 insets，使「挖孔避让仅横屏生效」及时切换
+        ViewCompat.requestApplyInsets(b.root)
+        b.topBar.visibility = state
+        b.statusRow.visibility = state
+        b.controlBar.visibility = state
     }
 
-    private fun nextRotate(current: RotateType): RotateType = when (current) {
-        RotateType.ANGLE_0 -> RotateType.ANGLE_90
-        RotateType.ANGLE_90 -> RotateType.ANGLE_180
-        RotateType.ANGLE_180 -> RotateType.ANGLE_270
-        else -> RotateType.ANGLE_0
+    private fun scheduleAutoHide() {
+        mainHandler.removeCallbacks(autoHideRunnable)
+        mainHandler.postDelayed(autoHideRunnable, UI_AUTO_HIDE_MS)
     }
 
-    /** 旋转只对 OPENGL 渲染生效；失败时给出原因而不是静默 */
-    private fun applyRotate(type: RotateType) {
-        val camera = getCurrentCamera()
-        if (camera == null || !isCameraOpened()) {
-            snack(getString(R.string.state_disconnected))
+    // ---------------- 分辨率（显式选择，无自动切换） ----------------
+
+    private var sheet: BottomSheetDialog? = null
+
+    private fun showResolutionSheet() {
+        if (previewSizes.isEmpty()) loadPreviewSizes()
+        if (previewSizes.isEmpty()) {
+            snack(getString(R.string.snack_resolution_unavailable))
             return
         }
-        try {
-            camera.setRotateType(type)
-        } catch (e: Exception) {
-            snack(e.localizedMessage ?: e.javaClass.simpleName)
+        val pad = resources.getDimensionPixelSize(R.dimen.sheet_padding)
+        val touch = resources.getDimensionPixelSize(R.dimen.touch_target)
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+            setBackgroundResource(R.drawable.bg_bottom_sheet)
+        }
+        container.addView(TextView(this).apply {
+            text = getString(R.string.sheet_title_resolution)
+            textSize = 18f
+            setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface))
+            setPadding(0, 0, 0, 8)
+        })
+        container.addView(TextView(this).apply {
+            text = getString(R.string.sheet_resolution_hint)
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface_variant))
+            setPadding(0, 0, 0, 12)
+        })
+
+        previewSizes.forEachIndexed { index, size ->
+            container.addView(TextView(this).apply {
+                text = size.width.toString() + " × " + size.height.toString()
+                textSize = 16f
+                gravity = Gravity.CENTER_VERTICAL
+                minHeight = touch
+                setPadding(pad, 0, pad, 0)
+                isSelected = index == currentSizeIndex
+                setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface))
+                setBackgroundResource(R.drawable.bg_sheet_option)
+                setOnClickListener {
+                    applyResolution(index)
+                    dismissSheet()
+                }
+            })
+        }
+
+        sheet = BottomSheetDialog(this).apply {
+            setContentView(container)
+            show()
         }
     }
 
+    private fun dismissSheet() {
+        sheet?.dismiss()
+        sheet = null
+    }
 
-    /** 在有可选列表时按列表轮换；列表为空时不做无依据的切换 */
-    private fun cycleResolution() {
-        if (previewSizes.isEmpty()) {
-            loadPreviewSizes()
-        }
-        if (previewSizes.isEmpty()) {
-            snack(getString(R.string.sheet_no_device))
-            return
-        }
+    private fun applyResolution(index: Int) {
         val camera = getCurrentCamera() ?: return
-        currentSizeIndex = (currentSizeIndex + 1) % previewSizes.size
-        val size = previewSizes[currentSizeIndex]
-        // AUSBC 的 updateResolution 通常只调 setPreviewSize，不一定回调 CLOSED/OPENED。
-        // 因此这里不改状态显示（保持「已连接」），只用标志抑制可能的 CLOSED 空状态闪烁，
-        // 并用定时器兜底：若相机真的没起来，再落回空状态。
+        val size = previewSizes.getOrNull(index) ?: return
         changingResolution = true
         try {
             camera.updateResolution(size.width, size.height)
-            snack(getString(R.string.snack_resolution_switched_fmt, size.width, size.height))
+            currentSizeIndex = index
             showState(UiState.Connected)
+            snack(getString(R.string.snack_resolution_switched_fmt, size.width, size.height))
             refreshMeta()
         } catch (e: Exception) {
             changingResolution = false
@@ -325,6 +432,23 @@ class MainActivity : CameraActivity() {
         }, RESOLUTION_SETTLE_DELAY_MS)
     }
 
+    /** 分辨率列表：优先 16:9，取不到则用全量；按面积降序 */
+    private fun loadPreviewSizes() {
+        val sizes = try {
+            getAllPreviewSizes(16.0 / 9.0)?.takeIf { it.isNotEmpty() }
+                ?: getAllPreviewSizes(null)
+        } catch (e: Exception) {
+            null
+        }
+        previewSizes.clear()
+        if (sizes != null) {
+            previewSizes.addAll(sizes.sortedByDescending { it.width * it.height })
+            if (currentSizeIndex >= previewSizes.size) currentSizeIndex = 0
+        }
+    }
+
+    // ---------------- 状态展示 ----------------
+
     override fun onCameraState(self: MultiCameraClient.ICamera, code: ICameraStateCallBack.State, msg: String?) {
         val b = binding ?: return
         when (code) {
@@ -336,7 +460,6 @@ class MainActivity : CameraActivity() {
                 refreshMeta()
             }
             ICameraStateCallBack.State.CLOSED -> {
-                // 主动切换分辨率引起的中断：保持加载态，等随后的 OPENED
                 if (changingResolution) {
                     showState(UiState.Loading)
                     return
@@ -360,18 +483,32 @@ class MainActivity : CameraActivity() {
         }
     }
 
-    /** 分辨率列表：优先 16:9，取不到则用全量列表；按面积降序便于从高到低轮换 */
-    private fun loadPreviewSizes() {
-        val sizes = try {
-            getAllPreviewSizes(16.0 / 9.0)?.takeIf { it.isNotEmpty() }
-                ?: getAllPreviewSizes(null)
-        } catch (e: Exception) {
-            null
-        }
-        previewSizes.clear()
-        if (sizes != null) {
-            previewSizes.addAll(sizes.sortedByDescending { it.width * it.height })
-            if (currentSizeIndex >= previewSizes.size) currentSizeIndex = 0
+    /**
+     * 空状态文案由「设备存在性 + 实际授权状态」共同决定，
+     * 避免把「已授权、正在打开」误报成未授权。
+     */
+    @SuppressLint("SetTextI18n")
+    private fun refreshEmptyState() {
+        val b = binding ?: return
+        val devices = pendingDevices()
+        val denied = devices.filter { usbManager?.hasPermission(it) != true }
+        when {
+            devices.isEmpty() -> {
+                b.tvEmptyTitle.setText(R.string.empty_title)
+                b.tvEmptySteps.setText(R.string.empty_steps_default)
+                b.btnRequestPermission.visibility = View.GONE
+            }
+            denied.isNotEmpty() -> {
+                val names = denied.joinToString(", ") { deviceLabel(it) }
+                b.tvEmptyTitle.setText(R.string.empty_title_detected)
+                b.tvEmptySteps.text = getString(R.string.empty_detected_fmt, names)
+                b.btnRequestPermission.visibility = View.VISIBLE
+            }
+            else -> {
+                b.tvEmptyTitle.setText(R.string.empty_title_opening)
+                b.tvEmptySteps.setText(R.string.empty_steps_opening)
+                b.btnRequestPermission.visibility = View.GONE
+            }
         }
     }
 
@@ -379,14 +516,11 @@ class MainActivity : CameraActivity() {
     private fun refreshMeta() {
         val b = binding ?: return
         val parts = mutableListOf<String>()
-
         val names = getDeviceList()?.joinToString(", ") { dev -> deviceLabel(dev) }
         if (!names.isNullOrBlank()) parts.add(names)
-
         previewSizes.getOrNull(currentSizeIndex)?.let {
             parts.add(it.width.toString() + "×" + it.height.toString())
         }
-
         b.tvMeta.text = if (parts.isEmpty()) getString(R.string.meta_unknown_device) else parts.joinToString(" · ")
     }
 
@@ -397,8 +531,7 @@ class MainActivity : CameraActivity() {
     private fun showSummary() {
         val b = binding ?: return
         val lines = mutableListOf<String>()
-        val count = getDeviceList()?.size ?: 0
-        lines.add(getString(R.string.sheet_title_device) + ": " + count)
+        lines.add(getString(R.string.sheet_title_device) + ": " + (getDeviceList()?.size ?: 0))
         if (previewSizes.isEmpty()) {
             lines.add(getString(R.string.sheet_no_device))
         } else {
@@ -414,12 +547,6 @@ class MainActivity : CameraActivity() {
     }
 
     private enum class UiState { Empty, Loading, Connected, Error }
-
-    private companion object {
-        private const val PERMISSION_RECHECK_DELAY_MS = 2500L
-        private const val STARTUP_PERMISSION_DELAY_MS = 2500L
-        private const val RESOLUTION_SETTLE_DELAY_MS = 2500L
-    }
 
     private fun showState(state: UiState, detail: String? = null) {
         val b = binding ?: return
@@ -443,8 +570,17 @@ class MainActivity : CameraActivity() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null)
+        dismissSheet()
         binding = null
         cameraView = null
         super.onDestroy()
+    }
+
+    private companion object {
+        private const val PERMISSION_RECHECK_DELAY_MS = 2500L
+        private const val STARTUP_PERMISSION_DELAY_MS = 2500L
+        private const val RESOLUTION_SETTLE_DELAY_MS = 2500L
+        private const val UI_AUTO_HIDE_MS = 5000L
     }
 }

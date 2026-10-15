@@ -39,7 +39,11 @@
 6. **UI 遵循 `impeccable/reference/android.md` + craft-floor**：触控目标 ≥48dp、字号用 sp、edge-to-edge + window insets、单一强调色、禁纯黑/渐变文字/emoji 图标/kicker 小标签/iOS 惯例。
 7. **验收截图必须来自真机**（`adb exec-out screencap -p`），不使用模拟器；暗色与 1.3× 字号场景在真机上切换后截图。
 8. `_ref/`、`.research/`、`.parts/`、`build/`、`local.properties` 一律不入库。
-9. **旋转 90/270 时必须同步交换预览容器宽高比**：AUSBC 的 setRotateType 只旋转 OpenGL 纹理，不改变视图比例（AspectRatioTextureView.kt:41-46 的横屏交换分支被作者注释掉了）。不做交换会让画面被横向拉伸。
+9. **横竖屏用系统自动旋转，且 `screenOrientation` 必须是 `unspecified`**（不要用 `fullSensor`）。实测 `fullSensor` 会在启动期发生方向抖动，TextureView 重建 Surface 而渲染器仍绑旧 Surface，整片预览透明（像素为背景色而非黑帧）；且它忽略用户的旋转锁定，语义也不符。
+10. **旋转后只刷新渲染尺寸，绝不可重注册相机**：`ICamera.setRenderSize` 内部是 `mSizeChangedFuture?.set(...)`（`MultiCameraClient.kt:592`），该一次性 Future 在相机打开阶段已消费，二次设置无效 → GL viewport 停在旧尺寸。而 `unRegisterMultiCamera()+registerMultiCamera()` 会走 `onAttachDev → requestPermission`，`USBMonitor` 在 Android 9+ 会**先撤销已有权限再申请** → 必然弹授权框（实测）。正解：反射调用公开的 `RenderManager.setRenderSize(w,h)`，它只投递 `MSG_GL_CHANGED_SIZE` 更新 `mScreenRender/mCameraRender` 尺寸（`RenderManager.kt:130-139`），完全不碰 USB。实测旋转期间权限日志 0 条、横屏内容框 1917×1056。
+11. **挖孔（displayCutout）避让只在横屏生效**：竖屏时挖孔位于顶部状态栏区域，不做横向避让。
+12. **横屏是沉浸态**：隐藏应用控件**与**系统状态栏（`WindowInsetsControllerCompat.hide(systemBars)`）；点击屏幕唤出控件并显示系统栏，5 秒后再次隐藏。竖屏始终显示系统栏。
+13. **分辨率只允许用户显式选择**（BottomSheet 列表），不做任何自动切换或轮换。
 
 ## 5. 操作纪律
 
@@ -74,6 +78,11 @@ gradle.bat :app:dependencies --configuration debugRuntimeClasspath
 | CAMERA 权限 | **保留**（换取 ROM 的 USB 授权通道） | ColorOS 15 真机复现 + SO 61542540 |
 | 旋转几何 | 90/270 时交换容器宽高比 | 读库源码 + 真机截图对比 |
 | 授权入口 | 空状态提供「申请 USB 授权」「重新检测设备」按钮 | 重装后 USB 授权被清时用户可自助恢复 |
+| 旋转方式 | 系统自动旋转（`unspecified`），应用内无旋转/镜像控件 | 用户决策：竖屏下 180° 无意义 |
+| 横屏沉浸 | 隐藏应用控件 + 系统状态栏，点击唤出（5s 自动隐藏） | 用户决策 |
+| 分辨率 | 仅用户显式选择，不自动切换 | 用户决策 |
+| 挖孔避让 | 仅横屏生效 | 用户决策 + 官方最佳实践 |
+| 旋转刷新渲染 | 反射调 `RenderManager.setRenderSize`，不重注册相机 | 库一次性 Future 限制 + 避免 USB 弹窗 |
 
 ## 8. 后续可用 skill
 
