@@ -101,6 +101,8 @@ gradle.bat :app:dependencies --configuration debugRuntimeClasspath
 | 拔卡后顶栏仍显示设备名/分辨率，且中间留一块纯黑矩形 | 库断开时只回调 `CLOSED`、不再广播帧率，没人擦这两行；`camera_container` 置透明后，库注入的 `AspectRatioTextureView` 仍不透明（无帧=纯黑，实测 1080×607 居中，y 896..1502） | 见上表「拔卡后界面复位」；隐藏用 `INVISIBLE` 而非 `GONE`，保留 Surface 以便重插直接出图 |
 | 推流中 `adb shell am force-stop` 后重启，画面全黑、fps 恒为 0（顶栏只有分辨率、无 `@Hz`） | 打断等时流把 MS2109 卡死，重开设备时 `libuvc/device: uvc_open: internal_devh->info->ctrl_if.bEndpointAddress is null`，`get_frame: allocate new frame` 只出现一两次 | 再干净重启一次即可恢复（实测 60/61 fps）；软件侧 `usb/unbind`、`authorized=0` 都**不能**模拟拔插（设备始终留在总线，内核不产生 detach uevent），验证拔插必须物理插拔 |
 | 帧率显示为 0 / 缺失 | 帧率上报挂在 `RenderManager.onFrameAvailable`（`RenderManager.kt:359`），无帧可报 | 属正常：出帧才有 `@Hz`，无帧时只显示分辨率 |
+| 设置底表左右上角圆角外被填成一块不透明灰（实测 `#3B3B3F`） | 圆角只落在内容容器上：Material 的 `Widget.MaterialComponents.BottomSheet` 给 `design_bottom_sheet` 的底是 `backgroundTint=?attr/colorSurface` + `shapeAppearance=?attr/shapeAppearanceLargeComponent`，后者在 MaterialComponents 下 `cornerSize=0dp`，于是这张**矩形**底盖住了 16dp 圆角之外的角 | `UsbCam.BottomSheet.Modal` 换成 `Widget.MaterialComponents.BottomSheet.Modal` 并显式指定 `backgroundTint=@color/hud_surface_variant` 与自建 `ShapeAppearance.UsbCam.BottomSheet`（上 16dp / 下 0dp）；验收：`evidence/shot-70-sheet-corners.png` 角外取到画面色（左 `#101010`、右 `#1E263E`），不再是单一灰 |
+| 排查「这块颜色是谁画的」 | 静态看 XML/样式容易猜错 | 用「给候选视图分别上色」的探针法（`window` / `touch_outside` / `design_bottom_sheet` / 内容容器各给一个纯色）再截图取样。实测：`touch_outside` 铺满状态栏以下整屏，`window` 背景只在状态栏那条露出，圆角外的填充来自 `design_bottom_sheet` 自身 |
 
 ## 8. 后续可用 skill
 

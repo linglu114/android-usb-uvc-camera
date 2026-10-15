@@ -568,7 +568,7 @@ class MainActivity : CameraActivity() {
             openProjectHomepage()
         })
 
-        sheet = BottomSheetDialog(this).apply {
+        sheet = BottomSheetDialog(this, R.style.UsbCam_BottomSheet).apply {
             setContentView(container)
             show()
         }
@@ -722,7 +722,7 @@ class MainActivity : CameraActivity() {
             })
         }
 
-        sheet = BottomSheetDialog(this).apply {
+        sheet = BottomSheetDialog(this, R.style.UsbCam_BottomSheet).apply {
             setContentView(container)
             show()
         }

@@ -81,13 +81,29 @@
         <item name="android:textColor">@color/hud_on_surface</item>
     </style>
 
-    <!-- 底表：沿用库的透明样式，圆角与内边距由本样式叠加 -->
-    <style name="UsbCam.BottomSheet" parent="Theme.Design.Light.BottomSheetDialog">
+    <!--
+      底表圆角必须同时落在 design_bottom_sheet 自身，而不只是内容容器上。
+      默认 bottomSheetStyle（Widget.MaterialComponents.BottomSheet）的形状取自
+      ?attr/shapeAppearanceLargeComponent，在 MaterialComponents 下 cornerSize 为 0dp，
+      而 backgroundTint = ?attr/colorSurface，于是这张矩形底会盖住内容容器 16dp 圆角
+      之外的两个上角，看起来像多垫了一层不透明遮罩。
+      这里把形状换成本应用自己的 16dp 上圆角、底色换成应用表面色，角外才透得过去。
+    -->
+    <style name="UsbCam.BottomSheet" parent="Theme.MaterialComponents.DayNight.BottomSheetDialog">
         <item name="bottomSheetStyle">@style/UsbCam.BottomSheet.Modal</item>
     </style>
 
-    <style name="UsbCam.BottomSheet.Modal" parent="Widget.Design.BottomSheet.Modal">
-        <item name="android:background">@drawable/bg_bottom_sheet</item>
+    <style name="UsbCam.BottomSheet.Modal" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">@color/hud_surface_variant</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.UsbCam.BottomSheet</item>
         <item name="behavior_peekHeight">auto</item>
+    </style>
+
+    <style name="ShapeAppearance.UsbCam.BottomSheet" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">@dimen/sheet_corner</item>
+        <item name="cornerSizeTopRight">@dimen/sheet_corner</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
     </style>
 </resources>
