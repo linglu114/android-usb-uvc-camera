@@ -65,6 +65,15 @@ class MainActivity : CameraActivity() {
     private var binding: ActivityMainBinding? = null
     private var cameraView: AspectRatioTextureView? = null
 
+    /**
+     * 当前相机引用。
+     * 库的 onDetachDec 会执行 mCurrentCamera?.cancel(true); mCurrentCamera = null，
+     * 之后 getCurrentCamera() 就取不到了；而它**从不调用 closeCamera()**，
+     * 导致 USB 句柄一直被持有（setUsbControlBlock(null) 只是引用置空，不释放设备），
+     * 重新插入后打不开、只能重启进程。所以这里自己留一份引用以便断开时关闭。
+     */
+    private var lastCamera: MultiCameraClient.ICamera? = null
+
     private var keepScreenOn: Boolean = true
     private var everOpened: Boolean = false
     private var changingResolution: Boolean = false
@@ -87,6 +96,12 @@ class MainActivity : CameraActivity() {
     private val usbDetachReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
+            // 立刻关闭相机、释放 USB 句柄。库的断开路径只 cancel Future、不调 closeCamera()，
+            // 句柄泄漏会导致重新插入后无法打开（实测只有重启进程才能恢复）。
+            // closeCamera() 会走 MSG_STOP_PREVIEW → closeCameraInternal() 真正释放设备，
+            // 并回调 onCameraState(CLOSED)，UI 也会随之落到空状态。
+            stopConnectWatchdog()
+            releaseCamera()
             // 等库的 onDetachDec 清理完再判断，避免拿到过期的设备列表
             mainHandler.postDelayed({
                 if (binding == null) return@postDelayed
@@ -101,6 +116,16 @@ class MainActivity : CameraActivity() {
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    // ---- 授权自愈看门狗（API 34+ 的 USB_PERMISSION 广播拿不到 EXTRA_DEVICE）----
+    // libuvc 在 SDK>=34 用 FLAG_IMMUTABLE 建授权 PendingIntent（USBMonitor.java:176-177），
+    // AOSP 对 immutable 的 PendingIntent 会跳过 fillIn，于是系统回填的 EXTRA_DEVICE 被丢弃，
+    // onReceive 里 device==null（:519）→ processConnect 永不执行。
+    // 而 USBMonitor.requestPermission() 在系统已授权时会走 :813 → :831-834 直接 processConnect，
+    // 所以只要授权达成后由应用补调一次 requestPermission，就能绕开坏掉的广播完成连接（且不弹框）。
+    private var connectWatchdog: Runnable? = null
+    private var watchdogTicks = 0
+    private var grantSeenAt = 0L
+
     private val autoHideRunnable = Runnable { if (isLandscape) setUiVisible(false) }
     private val backResetRunnable = Runnable { backPressedOnce = false }
 
@@ -187,6 +212,66 @@ class MainActivity : CameraActivity() {
         applyOrientationUi()
     }
 
+    /** 授权达成后补一次连接请求；库自己的补发会被 onAttachDev 的两个守卫吞掉。 */
+    private fun startConnectWatchdog() {
+        stopConnectWatchdog()
+        watchdogTicks = 0
+        grantSeenAt = 0L
+        val tick = object : Runnable {
+            override fun run() {
+                if (binding == null) { stopConnectWatchdog(); return }
+                // 库自己连上了就收工（everOpened 在 detach 时会被复位，故重插后仍可用）
+                if (isCameraOpened() || everOpened) { stopConnectWatchdog(); return }
+
+                val device = pendingDevices().firstOrNull { usbManager?.hasPermission(it) == true }
+                if (device == null) {
+                    if (++watchdogTicks > WATCHDOG_MAX_TICKS) { stopConnectWatchdog(); return }
+                    mainHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+                    return
+                }
+                val now = System.currentTimeMillis()
+                if (grantSeenAt == 0L) {          // 先观察一拍，给库自己的连接留时间
+                    grantSeenAt = now
+                    mainHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+                    return
+                }
+                if (now - grantSeenAt < WATCHDOG_SETTLE_MS) {
+                    mainHandler.postDelayed(this, WATCHDOG_INTERVAL_MS)
+                    return
+                }
+                // 命中 USBMonitor.requestPermission 的 hasPermission==true 分支 → processConnect
+                try { requestPermission(device) } catch (e: Exception) { /* 忽略 */ }
+                stopConnectWatchdog()             // 只补一次：再调会 close 掉刚建立的 ctrlBlock
+            }
+        }
+        connectWatchdog = tick
+        mainHandler.postDelayed(tick, WATCHDOG_INTERVAL_MS)
+    }
+
+    private fun stopConnectWatchdog() {
+        connectWatchdog?.let { mainHandler.removeCallbacks(it) }
+        connectWatchdog = null
+    }
+
+    /** 插入设备时启动看门狗（不主动请求授权，弹框仍由库的 onAttachDev 触发，避免重复请求） */
+    private val usbAttachReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return
+            mainHandler.postDelayed({ startConnectWatchdog() }, ATTACH_WATCHDOG_DELAY_MS)
+        }
+    }
+
+    /** 关闭并释放当前相机（库的断开路径只 cancel Future，不释放 native/GL 资源） */
+    private fun releaseCamera() {
+        val camera = lastCamera ?: getCurrentCamera()
+        lastCamera = null
+        try {
+            camera?.closeCamera()
+        } catch (e: Exception) {
+            // 设备已物理移除时关闭可能抛异常，忽略即可
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         ContextCompat.registerReceiver(
@@ -195,14 +280,18 @@ class MainActivity : CameraActivity() {
             IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        ContextCompat.registerReceiver(
+            this,
+            usbAttachReceiver,
+            IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     override fun onStop() {
-        try {
-            unregisterReceiver(usbDetachReceiver)
-        } catch (e: Exception) {
-            // 未注册成功时忽略
-        }
+        try { unregisterReceiver(usbDetachReceiver) } catch (e: Exception) { /* 未注册成功时忽略 */ }
+        try { unregisterReceiver(usbAttachReceiver) } catch (e: Exception) { /* 同上 */ }
+        stopConnectWatchdog()
         super.onStop()
     }
 
@@ -364,6 +453,7 @@ class MainActivity : CameraActivity() {
         try {
             denied.forEach { requestPermission(it) }
             snack(getString(R.string.snack_permission_requested))
+            startConnectWatchdog()
         } catch (e: Exception) {
             snack(e.localizedMessage ?: e.javaClass.simpleName)
         }
@@ -696,6 +786,7 @@ class MainActivity : CameraActivity() {
         when (code) {
             ICameraStateCallBack.State.OPENED -> {
                 everOpened = true
+                lastCamera = getCurrentCamera()
                 changingResolution = false
                 showState(UiState.Connected)
                 loadPreviewSizes()
@@ -811,6 +902,7 @@ class MainActivity : CameraActivity() {
     }
 
     override fun onDestroy() {
+        stopConnectWatchdog()
         mainHandler.removeCallbacksAndMessages(null)
         dismissSheet()
         binding = null
@@ -826,5 +918,9 @@ class MainActivity : CameraActivity() {
         private const val BACK_EXIT_WINDOW_MS = 2000L
         private const val LOADING_TIMEOUT_MS = 12000L
         private const val DETACH_SETTLE_DELAY_MS = 400L
+        private const val WATCHDOG_INTERVAL_MS = 600L
+        private const val WATCHDOG_SETTLE_MS = 800L
+        private const val WATCHDOG_MAX_TICKS = 40
+        private const val ATTACH_WATCHDOG_DELAY_MS = 1500L
     }
 }
