@@ -635,7 +635,11 @@ class MainActivity : CameraActivity() {
             previewSizes.addAll(sizes.sortedByDescending { it.width * it.height })
             // 让 currentSizeIndex 指向「正在使用的预览尺寸」，而不是列表里面积最大的那项：
             // 否则界面会把 1280x720 的实际预览显示成 1920x1080（帧率也就对不上分辨率了）。
-            val request = getCameraRequest()
+            // 必须问「当前相机」要请求，而不是用 getCameraRequest()：
+            // 后者是本 Activity 的请求模板（每次调用新建，值固定），
+            // 库 updateResolution 更新的是它内部持有的 mCameraRequest，
+            // 用模板反查会把用户刚选的分辨率又重置回模板值。
+            val request = getCurrentCamera()?.getCameraRequest() ?: getCameraRequest()
             val index = previewSizes.indexOfFirst {
                 it.width == request.previewWidth && it.height == request.previewHeight
             }
