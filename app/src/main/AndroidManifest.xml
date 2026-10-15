@@ -7,7 +7,18 @@
         android:name="android.hardware.usb.host"
         android:required="false" />
 
-    <!-- 库自带的 USB_PERMISSION 并非真实系统权限，移除以免误导 -->
+    <!--
+      移除上游库带入、但本应用不需要的权限：
+      - CAMERA：本应用只用外接 UVC 设备，不使用内置相机
+      - RECORD_AUDIO：首版不做音频（CameraRequest.AudioSource.NONE）
+      - USB_PERMISSION：并非真实系统权限，属误声明
+    -->
+    <uses-permission
+        android:name="android.permission.CAMERA"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.RECORD_AUDIO"
+        tools:node="remove" />
     <uses-permission
         android:name="android.permission.USB_PERMISSION"
         tools:node="remove" />
