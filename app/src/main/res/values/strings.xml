@@ -55,12 +55,8 @@
     <string name="sheet_about_credit">预览引擎：AndroidUSBCamera（Apache-2.0）</string>
     <string name="sheet_about_license">本项目以 Apache-2.0 开源</string>
     <string name="sheet_about_homepage">项目主页</string>
-    <!--
-      开源后只需替换这一处链接：把 OWNER/REPO 换成真实仓库地址即可。
-      未替换时点击会给出“链接待补充”提示，不会打开无效地址。
-    -->
-    <string name="about_project_url" translatable="false">https://github.com/OWNER/android-usb-uvc-camera</string>
-    <string name="about_link_todo">项目主页链接待补充（开源后替换）</string>
+    <!-- 项目主页：单一来源，只改这一处；点击直接交系统浏览器打开 -->
+    <string name="about_project_url" translatable="false">https://github.com/linglu114/android-usb-uvc-camera</string>
     <string name="sheet_title_device">设备</string>
     <string name="sheet_title_resolution">选择分辨率</string>
     <string name="sheet_resolution_hint">当前设备支持以下预览尺寸；选中后立即切换。</string>

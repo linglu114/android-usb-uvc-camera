@@ -20,15 +20,20 @@
 - Android 6.0（API 23）及以上，arm64 设备
 - 手机支持 OTG，且线材支持数据传输（不能是纯充电线）
 
+## 下载
+
+到 [Releases](https://github.com/linglu114/android-usb-uvc-camera/releases) 下载最新 APK 直接安装（arm64 设备）。
+
 ## 构建
 
 需要 JDK 21 与 Android SDK（`compileSdk 36`、`build-tools`、`ndk 28.2.13676358`）。
 
 ```bash
-./gradlew :app:assembleDebug
+./gradlew :app:assembleDebug     # 调试包
+./gradlew :app:assembleRelease   # 需要本地 keystore.properties，否则产物未签名
 ```
 
-产物：`app/build/outputs/apk/debug/app-debug.apk`。目前没有预编译包，需要自己构建。
+产物在 `app/build/outputs/apk/` 下。
 
 ## 常见问题
 

@@ -607,23 +607,18 @@ class MainActivity : CameraActivity() {
             ?: getString(R.string.sheet_value_default)
 
     /**
-     * 打开项目主页。
-     * 链接集中定义在 strings.xml 的 about_project_url；开源后只改那一处即可。
-     * 未替换时给出提示而不是打开无效地址。
+     * 打开项目主页：直接交给系统浏览器。
+     * 链接集中定义在 strings.xml 的 about_project_url（translatable=false），只改那一处。
      */
     private fun openProjectHomepage() {
         val url = getString(R.string.about_project_url)
-        val placeholder = url.contains("OWNER", ignoreCase = true) || !url.startsWith("http")
-        if (placeholder) {
-            // Snackbar 附加在主窗口，会被 BottomSheet（独立窗口）遮挡，先关面板再提示
-            dismissSheet()
-            snack(getString(R.string.about_link_todo))
-            return
-        }
+        // 先收起面板，从浏览器返回时看到的是预览画面，而不是残留的面板
+        dismissSheet()
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         } catch (e: Exception) {
-            snack(getString(R.string.about_link_todo))
+            // 只有设备上完全没有能处理 http(s) 的应用时才会走到这里；不弹提示，只留日志
+            Log.w(TAG, "no activity to open: $url", e)
         }
     }
 
@@ -958,6 +953,7 @@ class MainActivity : CameraActivity() {
     }
 
     private companion object {
+        private const val TAG = "MainActivity"
         private const val PERMISSION_RECHECK_DELAY_MS = 2500L
         private const val STARTUP_PERMISSION_DELAY_MS = 2500L
         private const val RESOLUTION_SETTLE_DELAY_MS = 2500L
