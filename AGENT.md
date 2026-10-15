@@ -50,7 +50,8 @@
 17. **HUD 底衬禁用渐变**：渐变在亮画面上会形成突兀过渡带（用户明确否掉）。用纯色 drawable；且**不要给 HUD 文字加 shadowRadius 较大的阴影**（4dp 在 420dpi 下会糊掉笔画）。
 18. **系统栏图标明暗必须按各自背景分别设置**：主题里的 `windowLightStatusBar` 是静态值，无法表达"两个系统栏压在不同背景上"——状态栏压在**跟随主题的 HUD 遮罩**上（浅色主题遮罩变白 → 图标必须转深色），导航栏压在**固定暗色的预览舞台**边缘（图标恒定浅色）。故在 `applySystemBarAppearance()` 里设置 `isAppearanceLightStatusBars = !isDark` / `isAppearanceLightNavigationBars = false`，并在 `onCreate` 与 `onConfigurationChanged` 调用。历史 bug：主题写死 `windowLightStatusBar=false`，浅色主题下白图标压白遮罩看不见。
 19. **帧率只能取库的实测值，拿不到 UVC 声明的刷新率**：原生层 `UVCCamera.addSize()` 只把 `"1920x1080"` 按 `x` 切开取宽高（`UVCCamera.java:395-397`），JSON 里不含帧率，故 `Size.fps` 恒为 0.0、Kotlin 的 `PreviewSize` 根本没有该字段。唯一可得的是库的**实测相机帧率**：`RenderManager.emitFrameRate()` 挂在 `onFrameAvailable`（相机 SurfaceTexture 每来一帧调一次），每秒经 `EventBus/BusKey.KEY_FRAME_RATE` 广播一次。应用直接 `EventBus.with<Int>(BusKey.KEY_FRAME_RATE).observe(this)` 即可，零额外开销。实测正确性：1080p→31Hz、720p→61Hz，随分辨率变化。
-20. **界面显示的分辨率必须是「正在使用的预览尺寸」**：`currentSizeIndex` 不能取列表首项（面积最大项），否则会把 1280×720 的实际预览显示成 1920×1080（帧率也就与分辨率对不上）。`loadPreviewSizes()` 里用 `getCameraRequest().previewWidth/Height` 反查下标。
+20. **断开检测必须由应用自己实现**：库的 `CameraActivity.onDetachDec`（注意拼写是 Dec）只做内部清理——`mCameraMap.remove`、`setUsbControlBlock(null)`、`mCurrentCamera = null`——**既不调用 `closeCamera()`，也不回调 `onCameraState(CLOSED)`**，所以拔掉采集卡后界面会一直停在「已连接」。应用需自行注册 `UsbManager.ACTION_USB_DEVICE_DETACHED` 广播，收到后延迟 ~400ms 等库清理完再判断设备列表是否为空，为空则落空状态。
+21. **界面显示的分辨率必须是「正在使用的预览尺寸」**：`currentSizeIndex` 不能取列表首项（面积最大项），否则会把 1280×720 的实际预览显示成 1920×1080（帧率也就与分辨率对不上）。`loadPreviewSizes()` 里用 `getCameraRequest().previewWidth/Height` 反查下标。
 21. **BottomSheet 是独立窗口，Snackbar 会被它遮挡**：需要在面板内提示用户时，先 `dismissSheet()` 再 `snack(...)`。
 
 ## 5. 操作纪律

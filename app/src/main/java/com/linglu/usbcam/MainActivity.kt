@@ -2,6 +2,8 @@ package com.linglu.usbcam
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -76,6 +78,27 @@ class MainActivity : CameraActivity() {
     private var uiVisible: Boolean = true
 
     private var backPressedOnce: Boolean = false
+
+    /**
+     * 断开检测：库的 CameraActivity.onDetachDec 只清理内部映射（setUsbControlBlock(null)、
+     * mCurrentCamera=null），**不会 closeCamera、也不回调 onCameraState(CLOSED)**，
+     * 所以拔掉采集卡后应用界面不会更新。这里自己监听 USB 拔出广播补齐。
+     */
+    private val usbDetachReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
+            // 等库的 onDetachDec 清理完再判断，避免拿到过期的设备列表
+            mainHandler.postDelayed({
+                if (binding == null) return@postDelayed
+                if (pendingDevices().isEmpty()) {
+                    everOpened = false
+                    changingResolution = false
+                    refreshEmptyState()
+                    showState(UiState.Empty)
+                }
+            }, DETACH_SETTLE_DELAY_MS)
+        }
+    }
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val autoHideRunnable = Runnable { if (isLandscape) setUiVisible(false) }
@@ -162,6 +185,25 @@ class MainActivity : CameraActivity() {
         }
         cameraView?.requestLayout()
         applyOrientationUi()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(
+            this,
+            usbDetachReceiver,
+            IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    override fun onStop() {
+        try {
+            unregisterReceiver(usbDetachReceiver)
+        } catch (e: Exception) {
+            // 未注册成功时忽略
+        }
+        super.onStop()
     }
 
     override fun onResume() {
@@ -783,5 +825,6 @@ class MainActivity : CameraActivity() {
         private const val UI_AUTO_HIDE_MS = 5000L
         private const val BACK_EXIT_WINDOW_MS = 2000L
         private const val LOADING_TIMEOUT_MS = 12000L
+        private const val DETACH_SETTLE_DELAY_MS = 400L
     }
 }
