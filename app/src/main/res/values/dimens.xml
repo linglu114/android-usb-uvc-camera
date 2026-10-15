@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 触控目标下限（impeccable/android.md: 48dp，间距 >= 8dp） -->
+    <dimen name="touch_target">48dp</dimen>
+    <dimen name="control_bar_height">72dp</dimen>
+    <dimen name="control_bar_gap">4dp</dimen>
+    <dimen name="status_bar_height">40dp</dimen>
+    <dimen name="top_scrim_height">88dp</dimen>
+    <dimen name="screen_padding">16dp</dimen>
+    <dimen name="sheet_corner">16dp</dimen>
+    <dimen name="sheet_padding">20dp</dimen>
+    <dimen name="hairline">1dp</dimen>
+</resources>

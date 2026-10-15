@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 底表容器：上圆角 16dp，无渐变、无阴影装饰 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/hud_surface_variant" />
+    <corners
+        android:topLeftRadius="@dimen/sheet_corner"
+        android:topRightRadius="@dimen/sheet_corner" />
+</shape>

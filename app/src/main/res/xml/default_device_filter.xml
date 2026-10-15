@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  USB 设备过滤：仅声明 UVC 视频类（class 14 = VIDEO）。
+  不写 vendor/product，避免把非本机采集卡排除在外；
+  实际设备识别由 USBMonitor 在运行时完成。
+-->
+<resources>
+    <usb-device class="14" />
+</resources>

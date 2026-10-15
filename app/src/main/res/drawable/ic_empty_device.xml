@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 空状态示意：采集设备轮廓 + 断开的连线（非 emoji，统一描边风格） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64"
+    android:tint="@color/hud_on_surface_variant">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M14,20h24v20H14zM17,23v14h18V23z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M40,28h8v12h-8zM43,31v6h2v-6z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M20,28h6v2h-6zM20,32h4v2h-4z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M10,46l44,-28 1.5,2.4 -44,28z" />
+</vector>

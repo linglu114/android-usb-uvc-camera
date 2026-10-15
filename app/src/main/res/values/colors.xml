@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Dark-first monitor HUD 调色板（原始色值，不做语义别名）。
+  约束（来自 impeccable craft-floor）：不使用纯 #000000；只有一个强调色；
+  不使用紫蓝渐变；强调色饱和度 < 80%。
+-->
+<resources>
+    <!-- 底层中性色（Light） -->
+    <color name="hud_canvas_light">#F7F6F3</color>
+    <color name="hud_surface_variant_light">#F0EFEC</color>
+    <color name="hud_on_surface_light">#232325</color>
+    <color name="hud_on_surface_variant_light">#6B6B70</color>
+    <color name="hud_outline_light">#EAEAEA</color>
+    <color name="hud_control_bar_light">#F2FFFFFF</color>
+
+    <!-- 底层中性色（Dark） -->
+    <color name="hud_canvas_dark">#101012</color>
+    <color name="hud_surface_variant_dark">#1C1C20</color>
+    <color name="hud_on_surface_dark">#F2F2F2</color>
+    <color name="hud_on_surface_variant_dark">#A8A8AD</color>
+    <color name="hud_outline_dark">#2A2A2F</color>
+    <color name="hud_control_bar_dark">#EB1C1C20</color>
+
+    <!-- 唯一强调色：锈红（两种方案共用） -->
+    <color name="hud_primary">#C4553D</color>
+    <color name="hud_on_primary">#FFFFFF</color>
+    <color name="hud_primary_container_light">#F6E3DE</color>
+    <color name="hud_on_primary_container_light">#3A1F18</color>
+    <color name="hud_primary_container_dark">#3A1F18</color>
+    <color name="hud_on_primary_container_dark">#F2D6CF</color>
+
+    <!-- 语义色：错误 / 录制指示（录制色不与 primary 混用） -->
+    <color name="hud_error">#B3261E</color>
+    <color name="hud_on_error">#FFFFFF</color>
+    <color name="hud_record">#E5484D</color>
+
+    <!-- 覆盖层：仅用于画面之上的可读性渐变 -->
+    <color name="hud_scrim_top">#B3000000</color>
+    <color name="hud_scrim_transparent">#00000000</color>
+    <color name="hud_placeholder_stroke">#5A5A62</color>
+</resources>

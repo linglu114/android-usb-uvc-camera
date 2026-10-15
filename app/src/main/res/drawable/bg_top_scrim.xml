@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 顶部可读性遮罩：深色渐隐，保证状态文字在任意画面上都可读 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="@color/hud_scrim_top"
+        android:endColor="@color/hud_scrim_transparent"
+        android:type="linear" />
+</shape>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 语义色映射（Light 为默认）。深色方案在 values-night/colors.xml 覆盖同名资源。 -->
+<resources>
+    <color name="hud_canvas">@color/hud_canvas_light</color>
+    <color name="hud_surface_variant">@color/hud_surface_variant_light</color>
+    <color name="hud_on_surface">@color/hud_on_surface_light</color>
+    <color name="hud_on_surface_variant">@color/hud_on_surface_variant_light</color>
+    <color name="hud_outline">@color/hud_outline_light</color>
+    <color name="hud_control_bar">@color/hud_control_bar_light</color>
+    <color name="hud_primary_container">@color/hud_primary_container_light</color>
+    <color name="hud_on_primary_container">@color/hud_on_primary_container_light</color>
+</resources>

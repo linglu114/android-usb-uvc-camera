@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 深色方案：覆盖语义色别名 -->
+<resources>
+    <color name="hud_canvas">@color/hud_canvas_dark</color>
+    <color name="hud_surface_variant">@color/hud_surface_variant_dark</color>
+    <color name="hud_on_surface">@color/hud_on_surface_dark</color>
+    <color name="hud_on_surface_variant">@color/hud_on_surface_variant_dark</color>
+    <color name="hud_outline">@color/hud_outline_dark</color>
+    <color name="hud_control_bar">@color/hud_control_bar_dark</color>
+    <color name="hud_primary_container">@color/hud_primary_container_dark</color>
+    <color name="hud_on_primary_container">@color/hud_on_primary_container_dark</color>
+</resources>

@@ -1,0 +1,33 @@
+# Build outputs
+build/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Gradle
+.gradle/
+
+# Local machine config (never commit)
+local.properties
+keystore.properties
+*.jks
+*.keystore
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Research raw material (kept on disk, not in git)
+_ref/
+.research/
+.parts/
+.taste-skill/
+.impeccable/
+
+# Evidence: keep only curated artifacts (deps.txt, device screenshots, check logs)
+evidence/*/
+!evidence/*.txt
+!evidence/*.png
+*.hprof

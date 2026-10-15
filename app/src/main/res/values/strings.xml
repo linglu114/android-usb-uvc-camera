@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">USB 摄像头</string>
+
+    <!-- 顶部信息 -->
+    <string name="meta_unknown_device">未识别摄像头</string>
+    <string name="meta_separator"> · </string>
+    <string name="action_exit">退出</string>
+
+    <!-- 空状态（自诊断指引） -->
+    <string name="empty_title">未检测到 USB 摄像头</string>
+    <string name="empty_step_1">1. 确认手机支持 OTG（部分机型需在设置中手动开启）</string>
+    <string name="empty_step_2">2. 插紧摄像头或采集卡，必要时重新插拔一次</string>
+    <string name="empty_step_3">3. 供电不足会反复掉线，请改用带外部供电的 USB Hub</string>
+
+    <!-- 加载态 -->
+    <string name="loading_opening">正在打开摄像头…</string>
+
+    <!-- 状态条 -->
+    <string name="state_connected">已连接</string>
+    <string name="state_connecting">连接中…</string>
+    <string name="state_disconnected">未连接</string>
+    <string name="state_denied">USB 授权被拒绝</string>
+    <string name="state_error_fmt">打开失败：%1$s</string>
+
+    <!-- 控制条 -->
+    <string name="cd_device">选择设备</string>
+    <string name="cd_resolution">切换分辨率</string>
+    <string name="cd_rotate">旋转画面</string>
+    <string name="cd_mirror">镜像画面</string>
+    <string name="cd_keep_screen_on">屏幕常亮</string>
+    <string name="cd_more">更多设置</string>
+
+    <!-- 抽屉 -->
+    <string name="sheet_title_device">设备</string>
+    <string name="sheet_title_resolution">分辨率</string>
+    <string name="sheet_title_transform">旋转与镜像</string>
+    <string name="sheet_title_display">显示</string>
+    <string name="sheet_title_about">关于</string>
+    <string name="sheet_rotate_0">0°</string>
+    <string name="sheet_rotate_90">90°</string>
+    <string name="sheet_rotate_180">180°</string>
+    <string name="sheet_rotate_270">270°</string>
+    <string name="sheet_mirror">水平镜像</string>
+    <string name="sheet_keep_screen_on">预览时保持屏幕常亮</string>
+    <string name="sheet_no_device">无可用设备</string>
+    <string name="sheet_about_text">基于 Apache-2.0 的 AndroidUSBCamera (ernestp fork 3.6.0) 构建。仅在本机使用，不采集、不上传任何画面。</string>
+
+    <!-- 反馈 -->
+    <string name="snack_permission_denied">USB 授权被拒绝 — 请重新插拔设备，并在系统弹窗中点「允许」</string>
+    <string name="snack_open_failed_fmt">打开摄像头失败：%1$s</string>
+    <string name="snack_resolution_switched_fmt">已切换到 %1$d×%2$d</string>
+    <string name="snack_action_retry">重试</string>
+    <string name="cd_empty_illustration">未检测到设备的示意</string>
+</resources>

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  App 主题。父级必须停留在 MaterialComponents 系列：
+  libausbc 的 TransparentBottomSheetStyle 继承 Theme.Design.Light.BottomSheetDialog，
+  换成 Theme.Material3.* 会让底表主题解析失败。
+  品牌只透过 theming 表达（impeccable/android.md）。
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.UsbCam" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- 唯一强调色 -->
+        <item name="colorPrimary">@color/hud_primary</item>
+        <item name="colorPrimaryVariant">@color/hud_primary</item>
+        <item name="colorOnPrimary">@color/hud_on_primary</item>
+        <item name="colorSecondary">@color/hud_primary</item>
+        <item name="colorOnSecondary">@color/hud_on_primary</item>
+        <item name="colorSecondaryVariant">@color/hud_primary</item>
+
+        <!-- 表面与文字 -->
+        <item name="android:colorBackground">@color/hud_canvas</item>
+        <item name="colorSurface">@color/hud_surface_variant</item>
+        <item name="colorOnSurface">@color/hud_on_surface</item>
+        <item name="colorOnBackground">@color/hud_on_surface</item>
+        <item name="colorError">@color/hud_error</item>
+        <item name="colorOnError">@color/hud_on_error</item>
+
+        <!-- 系统栏：沉浸式，内容不与系统 UI 重叠 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <!-- 字号跟随系统，不做固定 px -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+    </style>
+
+    <!-- 预览屏专用：无标题栏、内容延伸到系统栏之下 -->
+    <style name="Theme.UsbCam.Preview">
+        <item name="android:windowBackground">@color/hud_canvas</item>
+    </style>
+
+    <!-- 控制条上的图标按钮：保证 48dp 触控目标 -->
+    <style name="Widget.UsbCam.IconButton" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:layout_width">@dimen/touch_target</item>
+        <item name="android:layout_height">@dimen/touch_target</item>
+        <item name="android:minWidth">@dimen/touch_target</item>
+        <item name="android:minHeight">@dimen/touch_target</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">0dp</item>
+    </style>
+
+    <style name="TextAppearance.UsbCam.Meta" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:textSize">12sp</item>
+        <item name="android:letterSpacing">0.05</item>
+    </style>
+
+    <!-- 底表：沿用库的透明样式，圆角与内边距由本样式叠加 -->
+    <style name="UsbCam.BottomSheet" parent="Theme.Design.Light.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/UsbCam.BottomSheet.Modal</item>
+    </style>
+
+    <style name="UsbCam.BottomSheet.Modal" parent="Widget.Design.BottomSheet.Modal">
+        <item name="android:background">@drawable/bg_bottom_sheet</item>
+        <item name="behavior_peekHeight">auto</item>
+    </style>
+</resources>
