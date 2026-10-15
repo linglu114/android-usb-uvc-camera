@@ -76,6 +76,9 @@ class MainActivity : CameraActivity() {
 
     private var keepScreenOn: Boolean = true
     private var everOpened: Boolean = false
+
+    /** 当前界面状态；refreshMeta 用它判断顶栏元信息是否还有意义 */
+    private var uiState: UiState = UiState.Empty
     private var changingResolution: Boolean = false
     private var currentSizeIndex: Int = 0
 
@@ -845,9 +848,27 @@ class MainActivity : CameraActivity() {
         }
     }
 
+    /** 顶栏元信息是否成立：只有正在预览/正在打开的会话才有「设备 + 分辨率」可谈 */
+    private fun metaApplicable() = uiState == UiState.Connected || uiState == UiState.Loading
+
+    /**
+     * 清空顶栏元信息。
+     * 拔卡后必须回到启动时的样子（空字符串），否则会残留上次的设备名与分辨率：
+     * 库在断开时只回调 CLOSED、不再广播帧率，没人会把这两行擦掉。
+     */
+    private fun clearMeta() {
+        val b = binding ?: return
+        b.tvMetaDevice.text = ""
+        b.tvMetaResolution.text = ""
+    }
+
     @SuppressLint("NewApi")
     private fun refreshMeta() {
         val b = binding ?: return
+        if (!metaApplicable()) {
+            clearMeta()
+            return
+        }
         val names = getDeviceList()?.joinToString(", ") { dev -> deviceLabel(dev) }
         b.tvMetaDevice.text = if (names.isNullOrBlank()) getString(R.string.meta_unknown_device) else names
         b.tvMetaResolution.text = previewSizes.getOrNull(currentSizeIndex)?.let { size ->
@@ -870,12 +891,19 @@ class MainActivity : CameraActivity() {
 
     private fun showState(state: UiState, detail: String? = null) {
         val b = binding ?: return
+        uiState = state
         // 预览舞台（画面旁 letterbox 区）固定暗色；空/错误态置透明，
         // 让空状态使用跟随主题的根背景，避免浅色主题下深底深字。
         val previewing = state == UiState.Connected || state == UiState.Loading
         b.cameraContainer.setBackgroundColor(
             if (previewing) ContextCompat.getColor(this, R.color.hud_stage) else Color.TRANSPARENT
         )
+        // 空/错误态没有会话可描述：顶栏元信息清掉，库里注入的预览 TextureView 也要藏起来。
+        // 不能只靠背景色——TextureView 没有帧时是不透明的黑，会留下一块「画面窗口」残影
+        // （实测拔卡后为 1080x607 居中的纯黑区，y 896..1502）。用 INVISIBLE 而不是 GONE，
+        // 保留 Surface，重插后重新可见即可继续出图。
+        if (!previewing) clearMeta()
+        cameraView?.visibility = if (previewing) View.VISIBLE else View.INVISIBLE
         b.emptyState.visibility = if (state == UiState.Empty) View.VISIBLE else View.GONE
         b.loadingState.visibility = if (state == UiState.Loading) View.VISIBLE else View.GONE
 

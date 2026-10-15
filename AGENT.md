@@ -92,6 +92,15 @@ gradle.bat :app:dependencies --configuration debugRuntimeClasspath
 | 分辨率 | 仅用户显式选择，不自动切换 | 用户决策 |
 | 挖孔避让 | 仅横屏生效 | 用户决策 + 官方最佳实践 |
 | 旋转刷新渲染 | 反射调 `RenderManager.setRenderSize`，不重注册相机 | 库一次性 Future 限制 + 避免 USB 弹窗 |
+| 拔卡后界面复位 | `showState()` 统一负责：非预览态清空顶栏元信息（`clearMeta()`）并把 `cameraView` 置 `INVISIBLE`；`refreshMeta()` 亦以当前状态为准 | 真机验收 F7e（`evidence/shot-63/64`） |
+
+### 已知坑（真机实测）
+
+| 现象 | 根因 | 处置 |
+| --- | --- | --- |
+| 拔卡后顶栏仍显示设备名/分辨率，且中间留一块纯黑矩形 | 库断开时只回调 `CLOSED`、不再广播帧率，没人擦这两行；`camera_container` 置透明后，库注入的 `AspectRatioTextureView` 仍不透明（无帧=纯黑，实测 1080×607 居中，y 896..1502） | 见上表「拔卡后界面复位」；隐藏用 `INVISIBLE` 而非 `GONE`，保留 Surface 以便重插直接出图 |
+| 推流中 `adb shell am force-stop` 后重启，画面全黑、fps 恒为 0（顶栏只有分辨率、无 `@Hz`） | 打断等时流把 MS2109 卡死，重开设备时 `libuvc/device: uvc_open: internal_devh->info->ctrl_if.bEndpointAddress is null`，`get_frame: allocate new frame` 只出现一两次 | 再干净重启一次即可恢复（实测 60/61 fps）；软件侧 `usb/unbind`、`authorized=0` 都**不能**模拟拔插（设备始终留在总线，内核不产生 detach uevent），验证拔插必须物理插拔 |
+| 帧率显示为 0 / 缺失 | 帧率上报挂在 `RenderManager.onFrameAvailable`（`RenderManager.kt:359`），无帧可报 | 属正常：出帧才有 `@Hz`，无帧时只显示分辨率 |
 
 ## 8. 后续可用 skill
 
