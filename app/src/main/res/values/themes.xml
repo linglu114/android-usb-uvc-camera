@@ -27,6 +27,11 @@
         <!-- 系统栏：沉浸式，内容不与系统 UI 重叠 -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!--
+          系统栏图标的明暗由 MainActivity.applySystemBarAppearance() 在运行时设置：
+          状态栏压在跟随 DayNight 的 HUD 遮罩上，导航栏压在固定暗色的预览舞台边缘，
+          两者规则不同，静态主题属性无法表达。此处仅给出深色基线。
+        -->
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>

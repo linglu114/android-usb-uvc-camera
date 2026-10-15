@@ -137,6 +137,7 @@ class MainActivity : CameraActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        applySystemBarAppearance()
         applyInsets()
         applyKeepScreenOn()
     }
@@ -144,6 +145,7 @@ class MainActivity : CameraActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+        applySystemBarAppearance()
         // 方向变化后强制重新测量：Activity 声明了 configChanges 不会重建，
         // 而 AspectRatioTextureView 只在被重新测量时才按新屏幕计算尺寸，
         // 否则会停在旋转前的 1080x607（实测横屏画面未放大）。
@@ -166,6 +168,24 @@ class MainActivity : CameraActivity() {
      * 内容遵守系统栏与刘海安全区。
      * 挖孔避让仅在横屏生效（横屏时挖孔位于屏幕短边）；竖屏挖孔在顶部状态栏区域，无需横向避让。
      */
+    /**
+     * 系统栏图标明暗。
+     *
+     * 不能只靠主题的 windowLightStatusBar：那条属性是静态的，而我们两个系统栏
+     * 压在不同背景上——
+     * - 状态栏：压在 HUD 遮罩上，遮罩跟随 DayNight → 图标明暗跟随主题
+     *   （浅色主题遮罩为浅色，图标必须转深色，否则白压白看不见）；
+     * - 导航栏：压在固定暗色的预览舞台边缘 → 图标恒定用浅色。
+     */
+    private fun applySystemBarAppearance() {
+        val nightMask = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        val dark = nightMask == Configuration.UI_MODE_NIGHT_YES
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = false
+        }
+    }
+
     private fun applyInsets() {
         val b = binding ?: return
         val basePad = resources.getDimensionPixelSize(R.dimen.screen_padding)

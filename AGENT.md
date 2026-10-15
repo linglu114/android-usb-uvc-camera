@@ -48,7 +48,8 @@
 15. **HUD 遮罩与其上文字必须同源跟随主题**：遮罩色与文字色要么都用语义色（跟随 DayNight），要么都固定；**千万不能一边固定一边跟随**。曾经的 bug：遮罩固定深色 `#E60F0F11`，而文字用 `@color/hud_on_surface`，浅色系统下解析成 `#232325`，深字压深底导致实测亮度只剩 38（不可读）。现方案：`hud_bar_scrim` 走语义层（浅色 `#E6F7F6F3` / 深色 `#E60F0F11`），文字用 `hud_on_surface`。
 16. **预览舞台（画面 letterbox 区）固定暗色，不跟随主题**：视频周边永远是暗的，浅色主题下变白既刺眼又不专业。`camera_container` 用固定的 `@color/hud_stage`；空/错误态时由代码置为透明，让空状态复用跟随主题的根背景（否则会出现深底深字）。
 17. **HUD 底衬禁用渐变**：渐变在亮画面上会形成突兀过渡带（用户明确否掉）。用纯色 drawable；且**不要给 HUD 文字加 shadowRadius 较大的阴影**（4dp 在 420dpi 下会糊掉笔画）。
-18. **BottomSheet 是独立窗口，Snackbar 会被它遮挡**：需要在面板内提示用户时，先 `dismissSheet()` 再 `snack(...)`。
+18. **系统栏图标明暗必须按各自背景分别设置**：主题里的 `windowLightStatusBar` 是静态值，无法表达"两个系统栏压在不同背景上"——状态栏压在**跟随主题的 HUD 遮罩**上（浅色主题遮罩变白 → 图标必须转深色），导航栏压在**固定暗色的预览舞台**边缘（图标恒定浅色）。故在 `applySystemBarAppearance()` 里设置 `isAppearanceLightStatusBars = !isDark` / `isAppearanceLightNavigationBars = false`，并在 `onCreate` 与 `onConfigurationChanged` 调用。历史 bug：主题写死 `windowLightStatusBar=false`，浅色主题下白图标压白遮罩看不见。
+19. **BottomSheet 是独立窗口，Snackbar 会被它遮挡**：需要在面板内提示用户时，先 `dismissSheet()` 再 `snack(...)`。
 
 ## 5. 操作纪律
 
