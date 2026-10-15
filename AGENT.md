@@ -93,6 +93,7 @@ gradle.bat :app:dependencies --configuration debugRuntimeClasspath
 | 挖孔避让 | 仅横屏生效 | 用户决策 + 官方最佳实践 |
 | 旋转刷新渲染 | 反射调 `RenderManager.setRenderSize`，不重注册相机 | 库一次性 Future 限制 + 避免 USB 弹窗 |
 | 拔卡后界面复位 | `showState()` 统一负责：非预览态清空顶栏元信息（`clearMeta()`）并把 `cameraView` 置 `INVISIBLE`；`refreshMeta()` 亦以当前状态为准 | 真机验收 F7e（`evidence/shot-63/64`） |
+| 底表弹出方式 | `showSheet()` 统一封装：内容套 `NestedScrollView`；`behavior.skipCollapsed = true`，`show()` 后置 `STATE_EXPANDED` | 横屏 1080 高时默认 `behavior_peekHeight=auto` 只露出 192px（仅「设置」标题），必须手动上滑才看得到内容（`evidence/shot-71` vs `shot-73`） |
 
 ### 已知坑（真机实测）
 

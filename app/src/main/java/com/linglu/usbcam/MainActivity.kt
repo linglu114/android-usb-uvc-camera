@@ -34,6 +34,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updatePadding
+import androidx.core.widget.NestedScrollView
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.snackbar.Snackbar
@@ -568,9 +570,29 @@ class MainActivity : CameraActivity() {
             openProjectHomepage()
         })
 
+        showSheet(container)
+    }
+
+    /**
+     * 统一的底表弹出方式：
+     * - 内容套 [NestedScrollView]，横屏（1080 高）或 1.3× 字号下装不下时能滚，而不是被裁掉；
+     * - [BottomSheetBehavior.skipCollapsed] 关掉「折叠态」。库默认 behavior_peekHeight=auto 时，
+     *   折叠高度 = 父高 − 内容高，横屏只有 ~192px（实测只露「设置」标题），必须手动上滑才看得全；
+     *   展开态才是这里要的默认状态。
+     */
+    private fun showSheet(container: View) {
+        val scroll = NestedScrollView(this).apply {
+            addView(
+                container,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
         sheet = BottomSheetDialog(this, R.style.UsbCam_BottomSheet).apply {
-            setContentView(container)
+            setContentView(scroll)
+            behavior.skipCollapsed = true
             show()
+            behavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
     }
 
@@ -722,10 +744,7 @@ class MainActivity : CameraActivity() {
             })
         }
 
-        sheet = BottomSheetDialog(this, R.style.UsbCam_BottomSheet).apply {
-            setContentView(container)
-            show()
-        }
+        showSheet(container)
     }
 
     private fun dismissSheet() {
