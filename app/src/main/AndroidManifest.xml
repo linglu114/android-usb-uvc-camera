@@ -8,14 +8,16 @@
         android:required="false" />
 
     <!--
-      移除上游库带入、但本应用不需要的权限：
-      - CAMERA：本应用只用外接 UVC 设备，不使用内置相机
-      - RECORD_AUDIO：首版不做音频（CameraRequest.AudioSource.NONE）
-      - USB_PERMISSION：并非真实系统权限，属误声明
+      CAMERA 必须保留（上游库声明它，且有实证原因）：
+      StackOverflow 61542540 的实测结论是——部分 ROM 在应用未持有 CAMERA 权限时，
+      UsbManager.requestPermission 会被直接拒绝且不弹授权对话框。
+      本机 ColorOS 15 / Android 15 实测复现：移除 CAMERA 后，应用发出的授权请求
+      得到 onReceive(USB_PERMISSION, device=null)、权限始终 DENIED。
+      本应用只用外接 UVC 设备，不会调用内置相机，此处保留仅为换取 USB 授权通道。
+
+      RECORD_AUDIO：首版不做音频（CameraRequest.AudioSource.NONE），移除。
+      USB_PERMISSION：并非真实系统权限，属误声明，移除。
     -->
-    <uses-permission
-        android:name="android.permission.CAMERA"
-        tools:node="remove" />
     <uses-permission
         android:name="android.permission.RECORD_AUDIO"
         tools:node="remove" />

@@ -38,6 +38,7 @@
             android:contentDescription="@string/cd_empty_illustration" />
 
         <TextView
+            android:id="@+id/tv_empty_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
@@ -47,31 +48,35 @@
             android:textColor="@color/hud_on_surface" />
 
         <TextView
+            android:id="@+id/tv_empty_steps"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:lineSpacingMultiplier="1.35"
-            android:text="@string/empty_step_1"
+            android:text="@string/empty_steps_default"
             android:textAppearance="?attr/textAppearanceBody2"
             android:textColor="@color/hud_on_surface_variant" />
 
-        <TextView
-            android:layout_width="match_parent"
+        <!-- 可操作出口：空状态不是终点，用户能主动重试授权/重扫设备 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_request_permission"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:lineSpacingMultiplier="1.35"
-            android:text="@string/empty_step_2"
-            android:textAppearance="?attr/textAppearanceBody2"
-            android:textColor="@color/hud_on_surface_variant" />
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:minHeight="@dimen/touch_target"
+            android:text="@string/action_request_permission" />
 
-        <TextView
-            android:layout_width="match_parent"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_rescan"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:lineSpacingMultiplier="1.35"
-            android:text="@string/empty_step_3"
-            android:textAppearance="?attr/textAppearanceBody2"
-            android:textColor="@color/hud_on_surface_variant" />
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="4dp"
+            android:minHeight="@dimen/touch_target"
+            android:text="@string/action_rescan" />
     </LinearLayout>
 
     <!-- 加载态：等比骨架，不用通用转圈 -->

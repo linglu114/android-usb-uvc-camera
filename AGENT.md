@@ -32,12 +32,14 @@
 ## 4. 硬约束（禁止违反）
 
 1. **主题父级必须留在 `Theme.MaterialComponents.*`**：`libausbc` 的 `TransparentBottomSheetStyle` 继承 `Theme.Design.Light.BottomSheetDialog`，换成 `Theme.Material3.*` 会让底表主题解析失败。品牌只透过 color/type/shape 令牌表达。
-2. **不得引入 Glide / MMKV / ImmersionBar / webpdecoder / libpush**：这些是上游 demo 的依赖，不属于库本身；混入会重演 JitPack POM 污染问题。
-3. **native 依赖必须为 16 KB 对齐版本**：`libausbc:3.6.0` 的 arm64/x86_64 已对齐，勿降级到 jiangdongguo 3.2.7（4 KB 对齐 + RELRO 未对齐，在 16 KB 设备上会段错误）。
-4. **`abiFilters` 只留 `arm64-v8a`**（除非明确要上模拟器，才临时加 `x86_64`）。
-5. **UI 遵循 `impeccable/reference/android.md` + craft-floor**：触控目标 ≥48dp、字号用 sp、edge-to-edge + window insets、单一强调色、禁纯黑/渐变文字/emoji 图标/kicker 小标签/iOS 惯例。
-6. **验收截图必须来自真机**（`adb exec-out screencap -p`），不使用模拟器；暗色与 1.3× 字号场景在真机上切换后截图。
-7. `_ref/`、`.research/`、`.parts/`、`build/`、`local.properties` 一律不入库。
+2. **CAMERA 权限必须保留在清单中**（不要用 tools:node="remove" 去掉它）。实测（一加 9R / ColorOS 15 / Android 15）：移除 CAMERA 后，UsbManager.requestPermission 会被 ROM 静默拒绝且不弹授权对话框，日志表现为 onReceive(USB_PERMISSION, device=null)、权限永远 DENIED。依据 StackOverflow 61542540 高票答案与本次真机复现。
+3. **不得引入 Glide / MMKV / ImmersionBar / webpdecoder / libpush**：这些是上游 demo 的依赖，不属于库本身；混入会重演 JitPack POM 污染问题。
+4. **native 依赖必须为 16 KB 对齐版本**：`libausbc:3.6.0` 的 arm64/x86_64 已对齐，勿降级到 jiangdongguo 3.2.7（4 KB 对齐 + RELRO 未对齐，在 16 KB 设备上会段错误）。
+5. **`abiFilters` 只留 `arm64-v8a`**（除非明确要上模拟器，才临时加 `x86_64`）。
+6. **UI 遵循 `impeccable/reference/android.md` + craft-floor**：触控目标 ≥48dp、字号用 sp、edge-to-edge + window insets、单一强调色、禁纯黑/渐变文字/emoji 图标/kicker 小标签/iOS 惯例。
+7. **验收截图必须来自真机**（`adb exec-out screencap -p`），不使用模拟器；暗色与 1.3× 字号场景在真机上切换后截图。
+8. `_ref/`、`.research/`、`.parts/`、`build/`、`local.properties` 一律不入库。
+9. **旋转 90/270 时必须同步交换预览容器宽高比**：AUSBC 的 setRotateType 只旋转 OpenGL 纹理，不改变视图比例（AspectRatioTextureView.kt:41-46 的横屏交换分支被作者注释掉了）。不做交换会让画面被横向拉伸。
 
 ## 5. 操作纪律
 
@@ -69,6 +71,9 @@ gradle.bat :app:dependencies --configuration debugRuntimeClasspath
 | 排除 CameraX/Camera2 EXTERNAL | OEM 可选（Android 16 CDD §7.5.3 定为 MAY），绝大多数手机枚举不到 | 调研报告 |
 | SDK 区间 | minSdk 23 / compileSdk 36 / targetSdk 34 | 库要求 minSdk 23；targetSdk 34 避开 Android 15 强制 edge-to-edge 与前台服务类型新要求 |
 | 配色 | 深色 `#101012`（非纯黑）、强调色锈红 `#C4553D`、录制指示 `#E5484D` | UI 设计规格 |
+| CAMERA 权限 | **保留**（换取 ROM 的 USB 授权通道） | ColorOS 15 真机复现 + SO 61542540 |
+| 旋转几何 | 90/270 时交换容器宽高比 | 读库源码 + 真机截图对比 |
+| 授权入口 | 空状态提供「申请 USB 授权」「重新检测设备」按钮 | 重装后 USB 授权被清时用户可自助恢复 |
 
 ## 8. 后续可用 skill
 
