@@ -41,6 +41,8 @@ import com.jiangdg.ausbc.callback.ICameraStateCallBack
 import com.jiangdg.ausbc.camera.bean.CameraRequest
 import com.jiangdg.ausbc.camera.bean.PreviewSize
 import com.jiangdg.ausbc.render.env.RotateType
+import com.jiangdg.ausbc.utils.bus.BusKey
+import com.jiangdg.ausbc.utils.bus.EventBus
 import com.jiangdg.ausbc.widget.AspectRatioTextureView
 import com.jiangdg.ausbc.widget.IAspectRatio
 import com.linglu.usbcam.databinding.ActivityMainBinding
@@ -65,6 +67,9 @@ class MainActivity : CameraActivity() {
     private var everOpened: Boolean = false
     private var changingResolution: Boolean = false
     private var currentSizeIndex: Int = 0
+
+    /** 库每秒回传的实测渲染帧率（RenderManager.emitFrameRate → EventBus/KEY_FRAME_RATE） */
+    private var measuredFps: Int = 0
     private val previewSizes: MutableList<PreviewSize> = mutableListOf()
 
     private var isLandscape: Boolean = false
@@ -269,6 +274,15 @@ class MainActivity : CameraActivity() {
                 mainHandler.postDelayed(backResetRunnable, BACK_EXIT_WINDOW_MS)
             }
         })
+
+        // 分辨率旁的帧率：库每秒在 EventBus 上广播一次实测渲染帧率（AUSBC 唯一可得的帧率，
+        // UVC 声明的刷新率未由原生层输出，详见 AGENT.md）。
+        EventBus.with<Int>(BusKey.KEY_FRAME_RATE).observe(this) { fps ->
+            if (fps != measuredFps) {
+                measuredFps = fps
+                refreshMeta()
+            }
+        }
 
         refreshEmptyState()
         showState(UiState.Loading)
@@ -619,7 +633,13 @@ class MainActivity : CameraActivity() {
         previewSizes.clear()
         if (sizes != null) {
             previewSizes.addAll(sizes.sortedByDescending { it.width * it.height })
-            if (currentSizeIndex >= previewSizes.size) currentSizeIndex = 0
+            // 让 currentSizeIndex 指向「正在使用的预览尺寸」，而不是列表里面积最大的那项：
+            // 否则界面会把 1280x720 的实际预览显示成 1920x1080（帧率也就对不上分辨率了）。
+            val request = getCameraRequest()
+            val index = previewSizes.indexOfFirst {
+                it.width == request.previewWidth && it.height == request.previewHeight
+            }
+            currentSizeIndex = if (index >= 0) index else 0
         }
     }
 
@@ -693,9 +713,11 @@ class MainActivity : CameraActivity() {
         val b = binding ?: return
         val names = getDeviceList()?.joinToString(", ") { dev -> deviceLabel(dev) }
         b.tvMetaDevice.text = if (names.isNullOrBlank()) getString(R.string.meta_unknown_device) else names
-        b.tvMetaResolution.text = previewSizes.getOrNull(currentSizeIndex)
-            ?.let { it.width.toString() + "×" + it.height.toString() }
-            ?: ""
+        b.tvMetaResolution.text = previewSizes.getOrNull(currentSizeIndex)?.let { size ->
+            val base = size.width.toString() + "×" + size.height.toString()
+            // 无画面时库里不广播帧率，此时只显示分辨率
+            if (measuredFps > 0) "$base@${measuredFps}Hz" else base
+        } ?: ""
     }
 
     @RequiresApi(Build.VERSION_CODES.LOLLIPOP)

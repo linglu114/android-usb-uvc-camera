@@ -36,6 +36,10 @@
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
 
+        <!-- Snackbar 跟随主题，而不是 Material 默认的反色表面（否则深色模式下会弹亮底） -->
+        <item name="snackbarStyle">@style/UsbCam.Snackbar</item>
+        <item name="snackbarTextViewStyle">@style/UsbCam.Snackbar.TextView</item>
+
         <!-- 字号跟随系统，不做固定 px -->
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
     </style>
@@ -61,6 +65,20 @@
     <style name="TextAppearance.UsbCam.Meta" parent="TextAppearance.MaterialComponents.Caption">
         <item name="android:textSize">12sp</item>
         <item name="android:letterSpacing">0.05</item>
+    </style>
+
+    <!--
+      Snackbar：默认用 inverseSurface（与表面反色）以突出，但本应用的表面已高度自定义，
+      反色后在深色主题下会弹亮底、与主题正好相反。改为跟随主题的遮罩色 + 常规文字色，
+      与顶部 HUD 视觉统一。
+    -->
+    <style name="UsbCam.Snackbar" parent="Widget.MaterialComponents.Snackbar">
+        <item name="android:background">@drawable/bg_hud_bar</item>
+        <item name="backgroundTint">@null</item>
+    </style>
+
+    <style name="UsbCam.Snackbar.TextView" parent="Widget.MaterialComponents.Snackbar.TextView">
+        <item name="android:textColor">@color/hud_on_surface</item>
     </style>
 
     <!-- 底表：沿用库的透明样式，圆角与内边距由本样式叠加 -->
