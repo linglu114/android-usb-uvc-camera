@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  HUD 文字底衬：纯色，不用渐变。
+  渐变在亮色画面上会形成一条突兀的过渡带；实心块边界干净，且会随控件一起隐藏。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/hud_bar_scrim" />
+</shape>

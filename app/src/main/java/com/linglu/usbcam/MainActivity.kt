@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.net.Uri
@@ -176,11 +177,6 @@ class MainActivity : CameraActivity() {
                 left = basePad + cutL,
                 right = cutR
             )
-            b.statusRow.updatePadding(
-                bottom = bars.bottom,
-                left = basePad + cutL,
-                right = basePad + cutR
-            )
             insets
         }
         ViewCompat.requestApplyInsets(b.root)
@@ -336,7 +332,6 @@ class MainActivity : CameraActivity() {
         val b = binding ?: return
         val state = if (visible) View.VISIBLE else View.GONE
         b.topBar.visibility = state
-        b.statusRow.visibility = state
         // 系统状态栏/导航栏：仅横屏沉浸时隐藏；竖屏始终保留
         setSystemBarsVisible(visible || !isLandscape)
         ViewCompat.requestApplyInsets(b.root)
@@ -675,13 +670,11 @@ class MainActivity : CameraActivity() {
     @SuppressLint("NewApi")
     private fun refreshMeta() {
         val b = binding ?: return
-        val parts = mutableListOf<String>()
         val names = getDeviceList()?.joinToString(", ") { dev -> deviceLabel(dev) }
-        if (!names.isNullOrBlank()) parts.add(names)
-        previewSizes.getOrNull(currentSizeIndex)?.let {
-            parts.add(it.width.toString() + "×" + it.height.toString())
-        }
-        b.tvMeta.text = if (parts.isEmpty()) getString(R.string.meta_unknown_device) else parts.joinToString(" · ")
+        b.tvMetaDevice.text = if (names.isNullOrBlank()) getString(R.string.meta_unknown_device) else names
+        b.tvMetaResolution.text = previewSizes.getOrNull(currentSizeIndex)
+            ?.let { it.width.toString() + "×" + it.height.toString() }
+            ?: ""
     }
 
     @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
@@ -697,6 +690,12 @@ class MainActivity : CameraActivity() {
 
     private fun showState(state: UiState, detail: String? = null) {
         val b = binding ?: return
+        // 预览舞台（画面旁 letterbox 区）固定暗色；空/错误态置透明，
+        // 让空状态使用跟随主题的根背景，避免浅色主题下深底深字。
+        val previewing = state == UiState.Connected || state == UiState.Loading
+        b.cameraContainer.setBackgroundColor(
+            if (previewing) ContextCompat.getColor(this, R.color.hud_stage) else Color.TRANSPARENT
+        )
         b.emptyState.visibility = if (state == UiState.Empty) View.VISIBLE else View.GONE
         b.loadingState.visibility = if (state == UiState.Loading) View.VISIBLE else View.GONE
 

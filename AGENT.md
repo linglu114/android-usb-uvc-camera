@@ -45,7 +45,10 @@
 12. **横屏是沉浸态**：隐藏应用控件**与**系统状态栏（`WindowInsetsControllerCompat.hide(systemBars)`）；点击屏幕唤出控件并显示系统栏，5 秒后再次隐藏。竖屏始终显示系统栏。
 13. **分辨率只允许用户显式选择**（BottomSheet 列表），不做任何自动切换或轮换。
 14. **代码动态创建的 Material 控件必须与主题父级匹配**：本主题受库限制固定在 `Theme.MaterialComponents.*`，故不要用 M3 专有控件（如 `MaterialSwitch`）。实测：`MaterialSwitch` 在该主题下其 `SwitchCompat` 的 `textOn/textOff` 为 null，`onMeasure → makeLayout` 会对它们调 `length()` 而 **NPE 闪退**（`NullPointerException at SwitchCompat.makeLayout:993`）。改用 `SwitchMaterial`，并同时 `showText = false` + `textOn/textOff = ""` 作双保险。
-15. **BottomSheet 是独立窗口，Snackbar 会被它遮挡**：需要在面板内提示用户时，先 `dismissSheet()` 再 `snack(...)`。
+15. **HUD 遮罩与其上文字必须同源跟随主题**：遮罩色与文字色要么都用语义色（跟随 DayNight），要么都固定；**千万不能一边固定一边跟随**。曾经的 bug：遮罩固定深色 `#E60F0F11`，而文字用 `@color/hud_on_surface`，浅色系统下解析成 `#232325`，深字压深底导致实测亮度只剩 38（不可读）。现方案：`hud_bar_scrim` 走语义层（浅色 `#E6F7F6F3` / 深色 `#E60F0F11`），文字用 `hud_on_surface`。
+16. **预览舞台（画面 letterbox 区）固定暗色，不跟随主题**：视频周边永远是暗的，浅色主题下变白既刺眼又不专业。`camera_container` 用固定的 `@color/hud_stage`；空/错误态时由代码置为透明，让空状态复用跟随主题的根背景（否则会出现深底深字）。
+17. **HUD 底衬禁用渐变**：渐变在亮画面上会形成突兀过渡带（用户明确否掉）。用纯色 drawable；且**不要给 HUD 文字加 shadowRadius 较大的阴影**（4dp 在 420dpi 下会糊掉笔画）。
+18. **BottomSheet 是独立窗口，Snackbar 会被它遮挡**：需要在面板内提示用户时，先 `dismissSheet()` 再 `snack(...)`。
 
 ## 5. 操作纪律
 

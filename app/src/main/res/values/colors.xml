@@ -38,4 +38,14 @@
     <color name="hud_scrim_top">#B3000000</color>
     <color name="hud_scrim_transparent">#00000000</color>
     <color name="hud_placeholder_stroke">#5A5A62</color>
+    <!--
+      预览舞台：画面 letterbox 区域（画面旁边的底色），固定暗色、不跟随主题。
+      视频周边永远是暗的，浅色主题下变白会刺眼且不专业。
+    -->
+    <color name="hud_stage">#0E0E10</color>
+    <!-- HUD 文字底衬：纯色（非渐变），文字与底衬一同跟随主题 -->
+    <color name="hud_bar_scrim_light">#E6F7F6F3</color>
+    <color name="hud_bar_scrim_dark">#E60F0F11</color>
+    <!-- 文字阴影：与实心底衬配合，进一步提升可读性 -->
+    <color name="hud_text_shadow">#B3000000</color>
 </resources>

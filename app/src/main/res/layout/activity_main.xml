@@ -16,7 +16,8 @@
     <FrameLayout
         android:id="@+id/camera_container"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:background="@color/hud_stage" />
 
     <!-- 空状态：三等分自诊断指引 + 两个可操作出口 -->
     <LinearLayout
@@ -107,34 +108,66 @@
             android:textColor="@color/hud_on_surface_variant" />
     </LinearLayout>
 
-    <!-- 顶部可读性遮罩 -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/top_scrim_height"
-        android:layout_gravity="top"
-        android:background="@drawable/bg_top_scrim" />
-
-    <!-- 顶部栏：左侧元数据，右侧设置入口（唯一控件入口） -->
+    <!--
+      顶部栏（唯一的 HUD 遮罩，纯色非渐变）：
+      左：设备名 / 分辨率 两行；右：连接状态 + 设置入口。
+      文字固定浅色，因为画面背景不可控而遮罩固定深色。
+    -->
     <LinearLayout
         android:id="@+id/top_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
+        android:background="@drawable/bg_hud_bar"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="@dimen/screen_padding"
-        android:paddingEnd="4dp">
+        android:paddingTop="10dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="10dp">
 
-        <TextView
-            android:id="@+id/tv_meta"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_meta_device"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBody2"
+                android:textColor="@color/hud_on_surface"
+                tools:text="MS2109 USB Video" />
+
+            <TextView
+                android:id="@+id/tv_meta_resolution"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textColor="@color/hud_on_surface_variant"
+                tools:text="1920×1080" />
+        </LinearLayout>
+
+        <View
+            android:id="@+id/status_dot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_status_dot" />
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textAppearance="@style/TextAppearance.UsbCam.Meta"
-            android:textColor="@color/hud_on_surface"
-            tools:text="MS2109 · 1280×720" />
+            android:text="@string/state_disconnected"
+            android:textAppearance="?attr/textAppearanceCaption"
+            android:textColor="@color/hud_on_surface" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_settings"
@@ -142,36 +175,5 @@
             android:contentDescription="@string/cd_settings"
             app:icon="@drawable/ic_more"
             app:iconTint="@color/hud_on_surface" />
-    </LinearLayout>
-
-    <!-- 状态条：连接状态点 + 说明（贴近底部） -->
-    <LinearLayout
-        android:id="@+id/status_row"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:layout_marginBottom="@dimen/screen_padding"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="@dimen/screen_padding"
-        android:paddingEnd="@dimen/screen_padding">
-
-        <View
-            android:id="@+id/status_dot"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
-            android:background="@drawable/bg_status_dot" />
-
-        <TextView
-            android:id="@+id/tv_status"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:text="@string/state_disconnected"
-            android:textAppearance="?attr/textAppearanceCaption"
-            android:textColor="@color/hud_on_surface" />
     </LinearLayout>
 </FrameLayout>
