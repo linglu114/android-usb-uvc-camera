@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  单屏预览界面（Dark-first monitor HUD）。
-  层级：预览 -> 空状态 -> 顶部遮罩+元数据 -> 状态条 -> 底部控制条。
-  所有触控目标 >= 48dp；内容避开系统栏（window insets 在代码中应用）。
+  单屏预览（Dark-first monitor HUD）。
+  层级：预览 -> 空状态 -> 加载态 -> 顶部遮罩 -> 顶部栏(元数据 + 设置入口) -> 状态条。
+  设计约定：控件尽量少、全部 >=48dp；横屏进入即隐藏全部控件（沉浸），点击屏幕唤出。
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -18,7 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- 空状态：三等分自诊断指引，居中但非卡片阵列 -->
+    <!-- 空状态：三等分自诊断指引 + 两个可操作出口 -->
     <LinearLayout
         android:id="@+id/empty_state"
         android:layout_width="match_parent"
@@ -57,7 +57,6 @@
             android:textAppearance="?attr/textAppearanceBody2"
             android:textColor="@color/hud_on_surface_variant" />
 
-        <!-- 可操作出口：空状态不是终点，用户能主动重试授权/重扫设备 -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_request_permission"
             style="@style/Widget.MaterialComponents.Button"
@@ -79,7 +78,7 @@
             android:text="@string/action_rescan" />
     </LinearLayout>
 
-    <!-- 加载态：等比骨架，不用通用转圈 -->
+    <!-- 加载态 -->
     <LinearLayout
         android:id="@+id/loading_state"
         android:layout_width="match_parent"
@@ -95,8 +94,8 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="0"
-            android:background="@drawable/bg_empty_placeholder"
             android:layout_gravity="center_horizontal"
+            android:background="@drawable/bg_empty_placeholder"
             android:minHeight="180dp" />
 
         <TextView
@@ -108,59 +107,50 @@
             android:textColor="@color/hud_on_surface_variant" />
     </LinearLayout>
 
-    <!-- 顶部：可读性遮罩 + 元数据 + 退出 -->
+    <!-- 顶部可读性遮罩 -->
     <View
         android:layout_width="match_parent"
         android:layout_height="@dimen/top_scrim_height"
         android:layout_gravity="top"
         android:background="@drawable/bg_top_scrim" />
 
+    <!-- 顶部栏：左侧元数据，右侧设置入口（唯一控件入口） -->
     <LinearLayout
         android:id="@+id/top_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:baselineAligned="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingEnd="@dimen/screen_padding">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_exit"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="@dimen/touch_target"
-            android:layout_height="@dimen/touch_target"
-            android:contentDescription="@string/action_exit"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:minWidth="@dimen/touch_target"
-            android:minHeight="@dimen/touch_target"
-            app:icon="@drawable/ic_close"
-            app:iconPadding="0dp"
-            app:iconTint="@color/hud_on_surface" />
+        android:paddingStart="@dimen/screen_padding"
+        android:paddingEnd="4dp">
 
         <TextView
             android:id="@+id/tv_meta"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
             android:textAppearance="@style/TextAppearance.UsbCam.Meta"
             android:textColor="@color/hud_on_surface"
-            android:textIsSelectable="false"
             tools:text="MS2109 · 1280×720" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_settings"
+            style="@style/Widget.UsbCam.IconButton"
+            android:contentDescription="@string/cd_settings"
+            app:icon="@drawable/ic_more"
+            app:iconTint="@color/hud_on_surface" />
     </LinearLayout>
 
-    <!-- 状态条：连接状态点 + 说明 -->
+    <!-- 状态条：连接状态点 + 说明（贴近底部） -->
     <LinearLayout
         android:id="@+id/status_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:layout_marginBottom="88dp"
+        android:layout_marginBottom="@dimen/screen_padding"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="@dimen/screen_padding"
@@ -183,46 +173,5 @@
             android:text="@string/state_disconnected"
             android:textAppearance="?attr/textAppearanceCaption"
             android:textColor="@color/hud_on_surface" />
-    </LinearLayout>
-
-    <!-- 底部控制条：每个 48dp 触控目标；横竖屏由系统自动旋转，应用内不再提供画面旋转 -->
-    <LinearLayout
-        android:id="@+id/control_bar"
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/control_bar_height"
-        android:layout_gravity="bottom"
-        android:background="@drawable/bg_control_bar"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_device"
-            style="@style/Widget.UsbCam.IconButton"
-            android:contentDescription="@string/cd_device"
-            app:icon="@drawable/ic_device"
-            app:iconTint="@color/hud_primary" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_resolution"
-            style="@style/Widget.UsbCam.IconButton"
-            android:contentDescription="@string/cd_resolution"
-            app:icon="@drawable/ic_resolution"
-            app:iconTint="@color/hud_on_surface" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_keep_on"
-            style="@style/Widget.UsbCam.IconButton"
-            android:contentDescription="@string/cd_keep_screen_on"
-            app:icon="@drawable/ic_keep_screen_on"
-            app:iconTint="@color/hud_on_surface" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_more"
-            style="@style/Widget.UsbCam.IconButton"
-            android:contentDescription="@string/cd_more"
-            app:icon="@drawable/ic_more"
-            app:iconTint="@color/hud_on_surface" />
     </LinearLayout>
 </FrameLayout>

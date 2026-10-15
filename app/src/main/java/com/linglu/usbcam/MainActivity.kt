@@ -3,10 +3,12 @@ package com.linglu.usbcam
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -16,8 +18,10 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.CompoundButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
@@ -27,6 +31,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updatePadding
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.snackbar.Snackbar
 import com.jiangdg.ausbc.MultiCameraClient
 import com.jiangdg.ausbc.base.CameraActivity
@@ -42,11 +47,12 @@ import com.linglu.usbcam.databinding.ActivityMainBinding
  * 单屏预览：USB 摄像头 / HDMI 采集卡。
  *
  * 交互约定（用户已确认）：
- * - 画面朝向交给系统自动旋转，应用内不提供旋转/镜像控件
- * - 分辨率只在用户显式选择时切换，不做任何自动切换或轮换
- * - 横屏进入即隐藏全部控件（沉浸），点击屏幕切换，恢复显示后自动再隐藏
- * - 刘海/挖孔：画面保持沉浸延伸，关键控件用 displayCutout 安全边衬区避开
- *   （依据 developer.android.com/develop/ui/views/layout/display-cutout 最佳实践）
+ * - 画面朝向交给系统自动旋转（screenOrientation=unspecified），应用内不提供旋转/镜像控件
+ * - 唯一控件入口是顶部栏右侧的 ⋮，面板内含：分辨率 / 屏幕常亮 / 关于
+ * - 分辨率只在用户显式选择时切换，不做任何自动切换
+ * - 横屏进入即隐藏全部控件与系统栏（沉浸），点击屏幕唤出，5 秒后自动再隐藏
+ * - 返回键二次退出：首次提示、2 秒内再按才退出
+ * - 刘海/挖孔：画面保持沉浸延伸，关键控件用 displayCutout 安全边衬区避开（仅横屏）
  */
 class MainActivity : CameraActivity() {
 
@@ -62,8 +68,11 @@ class MainActivity : CameraActivity() {
     private var isLandscape: Boolean = false
     private var uiVisible: Boolean = true
 
+    private var backPressedOnce: Boolean = false
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val autoHideRunnable = Runnable { if (isLandscape) setUiVisible(false) }
+    private val backResetRunnable = Runnable { backPressedOnce = false }
 
     /** 系统 UsbManager：用于真实查询设备是否已授权（不靠猜测） */
     private val usbManager: UsbManager? by lazy {
@@ -74,7 +83,6 @@ class MainActivity : CameraActivity() {
      * CAMERA 运行时权限：保留它不是为了用内置相机，
      * 而是因为部分 ROM（本机 ColorOS 15 实测）在缺少 CAMERA 时
      * 会让 UsbManager.requestPermission 直接被拒且不弹授权框。
-     * 依据：StackOverflow 61542540 + 本机复现。
      */
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -146,17 +154,38 @@ class MainActivity : CameraActivity() {
 
     /**
      * 内容遵守系统栏与刘海安全区。
-     * 横屏时挖孔位于屏幕短边（左侧或右侧），给控件加左右内边距避免被遮挡；
-     * 预览画面本身保持延伸（沉浸式），不额外裁切。
+     * 挖孔避让仅在横屏生效（横屏时挖孔位于屏幕短边）；竖屏挖孔在顶部状态栏区域，无需横向避让。
      */
+    private fun applyInsets() {
+        val b = binding ?: return
+        val basePad = resources.getDimensionPixelSize(R.dimen.screen_padding)
+        ViewCompat.setOnApplyWindowInsetsListener(b.root) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val cutL = if (isLandscape) insets.getInsets(WindowInsetsCompat.Type.displayCutout()).left else 0
+            val cutR = if (isLandscape) insets.getInsets(WindowInsetsCompat.Type.displayCutout()).right else 0
+            b.topBar.updatePadding(
+                top = bars.top,
+                left = basePad + cutL,
+                right = cutR
+            )
+            b.statusRow.updatePadding(
+                bottom = bars.bottom,
+                left = basePad + cutL,
+                right = basePad + cutR
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(b.root)
+    }
+
     /**
      * 只把新的表面尺寸告知渲染器，不触碰 USB 授权链路。
      *
      * 为什么不用公开 API：
      * - ICamera.setRenderSize 内部是 mSizeChangedFuture?.set(...)（MultiCameraClient.kt:592），
-     *   该 SettableFuture 在相机打开阶段已被消费，二次 set 无效，GL viewport 会停在旧尺寸。
-     * - 重注册相机（unRegisterMultiCamera + registerMultiCamera）会走 onAttachDev →
-     *   requestPermission，而 USBMonitor 在 Android 9+ 会先撤销已有权限再申请，必然弹授权框。
+     *   该一次性 Future 在相机打开阶段已被消费，二次 set 无效，GL viewport 会停在旧尺寸。
+     * - 重注册相机会走 onAttachDev → requestPermission，而 USBMonitor 在 Android 9+ 会先撤销
+     *   已有权限再申请，必然弹授权框。
      * - RenderManager.setRenderSize 是公开方法，只投递 MSG_GL_CHANGED_SIZE，更新
      *   mScreenRender/mCameraRender 的尺寸与 buffer（RenderManager.kt:130-139），不涉 USB。
      */
@@ -183,64 +212,18 @@ class MainActivity : CameraActivity() {
         return false
     }
 
-    private fun applyInsets() {
-        val b = binding ?: return
-        val basePad = resources.getDimensionPixelSize(R.dimen.screen_padding)
-        ViewCompat.setOnApplyWindowInsetsListener(b.root) { _, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            // 挖孔避让仅在横屏生效：竖屏时挖孔位于顶部状态栏区域，无需横向避让
-            val cutL = if (isLandscape) insets.getInsets(WindowInsetsCompat.Type.displayCutout()).left else 0
-            val cutR = if (isLandscape) insets.getInsets(WindowInsetsCompat.Type.displayCutout()).right else 0
-            b.topBar.updatePadding(
-                top = bars.top,
-                left = cutL,
-                right = basePad + cutR
-            )
-            b.controlBar.updatePadding(
-                bottom = bars.bottom,
-                left = cutL + 8,
-                right = basePad + cutR
-            )
-            b.statusRow.updatePadding(left = basePad + cutL, right = basePad + cutR)
-            insets
-        }
-        ViewCompat.requestApplyInsets(b.root)
-    }
-
-    /**
-     * 系统栏显隐。横屏沉浸时隐藏状态栏与导航栏，并允许边缘滑动临时唤出；
-     * 竖屏或用户唤出控件时恢复显示。
-     */
-    private fun setSystemBarsVisible(visible: Boolean) {
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        if (visible) {
-            controller.show(WindowInsetsCompat.Type.systemBars())
-        } else {
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-        }
-    }
-
     private fun applyKeepScreenOn() {
         if (keepScreenOn) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
-        binding?.btnKeepOn?.alpha = if (keepScreenOn) 1f else 0.45f
     }
 
     override fun initData() {
         val b = binding ?: return
-        b.btnExit.setOnClickListener { finish() }
-        b.btnKeepOn.setOnClickListener {
-            keepScreenOn = !keepScreenOn
-            applyKeepScreenOn()
-        }
-        b.btnResolution.setOnClickListener { showResolutionSheet() }
-        b.btnDevice.setOnClickListener { showSummary() }
-        b.btnMore.setOnClickListener { showSummary() }
+
+        b.btnSettings.setOnClickListener { showSettingsSheet() }
 
         // 空状态的出口：设备已插入但未授权时，用户可主动触发系统授权
         b.btnRequestPermission.setOnClickListener { requestUsbPermission() }
@@ -248,6 +231,19 @@ class MainActivity : CameraActivity() {
 
         // 横屏沉浸：点击屏幕切换控件显隐（按钮会消费自身点击，不会误触）
         b.root.setOnClickListener { toggleUi() }
+
+        // 二次返回退出：首次提示，2 秒内再按才真正退出
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (backPressedOnce) {
+                    finish()
+                    return
+                }
+                backPressedOnce = true
+                snack(getString(R.string.snack_press_again_to_exit))
+                mainHandler.postDelayed(backResetRunnable, BACK_EXIT_WINDOW_MS)
+            }
+        })
 
         refreshEmptyState()
         showState(UiState.Loading)
@@ -267,7 +263,6 @@ class MainActivity : CameraActivity() {
         }
     }
 
-    /** 已插入的 USB 设备（UVC 设备在无权限时也能枚举到） */
     private fun pendingDevices(): List<UsbDevice> = try {
         getDeviceList()?.toList().orEmpty()
     } catch (e: Exception) {
@@ -294,10 +289,7 @@ class MainActivity : CameraActivity() {
         mainHandler.postDelayed({ onPermissionChecked() }, PERMISSION_RECHECK_DELAY_MS)
     }
 
-    /**
-     * 授权复查：用系统 UsbManager 真实查询，而不是猜测。
-     * 只有确实仍有设备未授权时才落空状态；已授权则保持加载态交给 OPENED。
-     */
+    /** 授权复查：用系统 UsbManager 真实查询，已授权则保持加载态交给 OPENED */
     private fun onPermissionChecked() {
         if (binding == null) return
         if (everOpened || isCameraOpened()) return
@@ -335,13 +327,26 @@ class MainActivity : CameraActivity() {
         uiVisible = visible
         val b = binding ?: return
         val state = if (visible) View.VISIBLE else View.GONE
-        // 系统状态栏/导航栏：仅横屏沉浸时隐藏；竖屏始终保留
-        setSystemBarsVisible(visible || !isLandscape)
-        // 方向变化时重新分派 insets，使「挖孔避让仅横屏生效」及时切换
-        ViewCompat.requestApplyInsets(b.root)
         b.topBar.visibility = state
         b.statusRow.visibility = state
-        b.controlBar.visibility = state
+        // 系统状态栏/导航栏：仅横屏沉浸时隐藏；竖屏始终保留
+        setSystemBarsVisible(visible || !isLandscape)
+        ViewCompat.requestApplyInsets(b.root)
+    }
+
+    /**
+     * 系统栏显隐。横屏沉浸时隐藏状态栏与导航栏，并允许边缘滑动临时唤出；
+     * 竖屏或用户唤出控件时恢复显示。
+     */
+    private fun setSystemBarsVisible(visible: Boolean) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        if (visible) {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     private fun scheduleAutoHide() {
@@ -349,9 +354,164 @@ class MainActivity : CameraActivity() {
         mainHandler.postDelayed(autoHideRunnable, UI_AUTO_HIDE_MS)
     }
 
-    // ---------------- 分辨率（显式选择，无自动切换） ----------------
+    // ---------------- 设置面板（唯一控件入口） ----------------
 
     private var sheet: BottomSheetDialog? = null
+
+    private fun showSettingsSheet() {
+        val pad = resources.getDimensionPixelSize(R.dimen.sheet_padding)
+        val touch = resources.getDimensionPixelSize(R.dimen.touch_target)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+            setBackgroundResource(R.drawable.bg_bottom_sheet)
+        }
+
+        container.addView(makeTitle(getString(R.string.sheet_title_settings)))
+        container.addView(makeCaption(getString(R.string.sheet_settings_hint)))
+
+        // 分辨率
+        container.addView(makeActionRow(getString(R.string.sheet_title_resolution), resolutionLabel()) {
+            dismissSheet()
+            showResolutionSheet()
+        })
+
+        // 屏幕常亮（开关）
+        container.addView(makeSwitchRow(
+            getString(R.string.sheet_screen_on),
+            getString(R.string.sheet_screen_on_desc),
+            keepScreenOn
+        ) { checked ->
+            keepScreenOn = checked
+            applyKeepScreenOn()
+        })
+
+        // 关于
+        container.addView(makeSectionTitle(getString(R.string.sheet_about)))
+        container.addView(makeCaption(getString(R.string.sheet_about_version_fmt, appVersionName())))
+        container.addView(makeCaption(getString(R.string.sheet_about_credit)))
+        container.addView(makeCaption(getString(R.string.sheet_about_license)))
+        container.addView(makeActionRow(getString(R.string.sheet_about_homepage), null) {
+            openProjectHomepage()
+        })
+
+        sheet = BottomSheetDialog(this).apply {
+            setContentView(container)
+            show()
+        }
+    }
+
+    private fun appVersionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "—"
+    } catch (e: Exception) {
+        "—"
+    }
+
+    private fun resolutionLabel(): String =
+        previewSizes.getOrNull(currentSizeIndex)?.let { it.width.toString() + "×" + it.height.toString() }
+            ?: getString(R.string.sheet_value_default)
+
+    /**
+     * 打开项目主页。
+     * 链接集中定义在 strings.xml 的 about_project_url；开源后只改那一处即可。
+     * 未替换时给出提示而不是打开无效地址。
+     */
+    private fun openProjectHomepage() {
+        val url = getString(R.string.about_project_url)
+        val placeholder = url.contains("OWNER", ignoreCase = true) || !url.startsWith("http")
+        if (placeholder) {
+            snack(getString(R.string.about_link_todo))
+            return
+        }
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: Exception) {
+            snack(getString(R.string.about_link_todo))
+        }
+    }
+
+    private fun makeTitle(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 18f
+        setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface))
+        setPadding(0, 0, 0, 6)
+    }
+
+    private fun makeSectionTitle(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 14f
+        setTextColor(ContextCompat.getColor(context, R.color.hud_primary))
+        setPadding(0, 20, 0, 8)
+    }
+
+    private fun makeCaption(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 13f
+        setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface_variant))
+        setPadding(0, 0, 0, 6)
+    }
+
+    private fun makeActionRow(title: String, value: String?, onClick: () -> Unit): LinearLayout {
+        val pad = resources.getDimensionPixelSize(R.dimen.sheet_padding)
+        val touch = resources.getDimensionPixelSize(R.dimen.touch_target)
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = touch
+            setPadding(0, 0, 0, 0)
+            isClickable = true
+            isFocusable = true
+            setBackgroundResource(R.drawable.bg_sheet_option)
+            addView(TextView(context).apply {
+                text = title
+                textSize = 16f
+                setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface))
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (!value.isNullOrBlank()) {
+                addView(TextView(context).apply {
+                    text = value
+                    textSize = 14f
+                    setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface_variant))
+                    setPadding(pad, 0, 0, 0)
+                })
+            }
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun makeSwitchRow(title: String, desc: String, checked: Boolean, onChanged: (Boolean) -> Unit): LinearLayout {
+        val touch = resources.getDimensionPixelSize(R.dimen.touch_target)
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = touch
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = title
+                    textSize = 16f
+                    setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface))
+                })
+                addView(TextView(context).apply {
+                    text = desc
+                    textSize = 12f
+                    setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface_variant))
+                })
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(SwitchMaterial(context).apply {
+                // 代码动态创建的 SwitchCompat 子类在 MaterialComponents 主题下
+                // textOn/textOff 可能为 null，onMeasure→makeLayout 会对它们调 length() 而 NPE。
+                // 关闭开关文字并显式给出空串，彻底规避。
+                showText = false
+                textOn = ""
+                textOff = ""
+                isChecked = checked
+                setOnCheckedChangeListener { _: CompoundButton, value: Boolean -> onChanged(value) }
+            })
+        }
+    }
+
+    // ---------------- 分辨率（显式选择，无自动切换） ----------------
 
     private fun showResolutionSheet() {
         if (previewSizes.isEmpty()) loadPreviewSizes()
@@ -367,18 +527,8 @@ class MainActivity : CameraActivity() {
             setPadding(pad, pad, pad, pad)
             setBackgroundResource(R.drawable.bg_bottom_sheet)
         }
-        container.addView(TextView(this).apply {
-            text = getString(R.string.sheet_title_resolution)
-            textSize = 18f
-            setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface))
-            setPadding(0, 0, 0, 8)
-        })
-        container.addView(TextView(this).apply {
-            text = getString(R.string.sheet_resolution_hint)
-            textSize = 13f
-            setTextColor(ContextCompat.getColor(context, R.color.hud_on_surface_variant))
-            setPadding(0, 0, 0, 12)
-        })
+        container.addView(makeTitle(getString(R.string.sheet_title_resolution)))
+        container.addView(makeCaption(getString(R.string.sheet_resolution_hint)))
 
         previewSizes.forEachIndexed { index, size ->
             container.addView(TextView(this).apply {
@@ -528,19 +678,6 @@ class MainActivity : CameraActivity() {
     private fun deviceLabel(dev: UsbDevice): String =
         dev.productName?.takeIf { it.isNotBlank() } ?: dev.deviceName
 
-    private fun showSummary() {
-        val b = binding ?: return
-        val lines = mutableListOf<String>()
-        lines.add(getString(R.string.sheet_title_device) + ": " + (getDeviceList()?.size ?: 0))
-        if (previewSizes.isEmpty()) {
-            lines.add(getString(R.string.sheet_no_device))
-        } else {
-            lines.add(getString(R.string.sheet_title_resolution))
-            previewSizes.take(6).forEach { lines.add("  " + it.width + "×" + it.height) }
-        }
-        Snackbar.make(b.root, lines.joinToString("\n"), Snackbar.LENGTH_LONG).show()
-    }
-
     private fun snack(text: String) {
         val b = binding ?: return
         Snackbar.make(b.root, text, Snackbar.LENGTH_SHORT).show()
@@ -582,5 +719,6 @@ class MainActivity : CameraActivity() {
         private const val STARTUP_PERMISSION_DELAY_MS = 2500L
         private const val RESOLUTION_SETTLE_DELAY_MS = 2500L
         private const val UI_AUTO_HIDE_MS = 5000L
+        private const val BACK_EXIT_WINDOW_MS = 2000L
     }
 }
