@@ -74,6 +74,14 @@ class MainActivity : CameraActivity() {
     private val autoHideRunnable = Runnable { if (isLandscape) setUiVisible(false) }
     private val backResetRunnable = Runnable { backPressedOnce = false }
 
+    /** 加载态超时出口：OPENED 迟迟不来时不能把界面永久钉在「正在打开摄像头…」 */
+    private val loadingTimeoutRunnable = Runnable {
+        if (binding == null || isCameraOpened()) return@Runnable
+        refreshEmptyState()
+        showState(UiState.Empty)
+        snack(getString(R.string.snack_open_timeout))
+    }
+
     /** 系统 UsbManager：用于真实查询设备是否已授权（不靠猜测） */
     private val usbManager: UsbManager? by lazy {
         getSystemService(Context.USB_SERVICE) as? UsbManager
@@ -692,6 +700,12 @@ class MainActivity : CameraActivity() {
         b.emptyState.visibility = if (state == UiState.Empty) View.VISIBLE else View.GONE
         b.loadingState.visibility = if (state == UiState.Loading) View.VISIBLE else View.GONE
 
+        // 加载态挂超时；进入其它状态即摘除
+        mainHandler.removeCallbacks(loadingTimeoutRunnable)
+        if (state == UiState.Loading) {
+            mainHandler.postDelayed(loadingTimeoutRunnable, LOADING_TIMEOUT_MS)
+        }
+
         val dot = b.statusDot
         val tint = when (state) {
             UiState.Connected -> R.color.hud_primary
@@ -722,5 +736,6 @@ class MainActivity : CameraActivity() {
         private const val RESOLUTION_SETTLE_DELAY_MS = 2500L
         private const val UI_AUTO_HIDE_MS = 5000L
         private const val BACK_EXIT_WINDOW_MS = 2000L
+        private const val LOADING_TIMEOUT_MS = 12000L
     }
 }
