@@ -420,6 +420,8 @@ class MainActivity : CameraActivity() {
         val url = getString(R.string.about_project_url)
         val placeholder = url.contains("OWNER", ignoreCase = true) || !url.startsWith("http")
         if (placeholder) {
+            // Snackbar 附加在主窗口，会被 BottomSheet（独立窗口）遮挡，先关面板再提示
+            dismissSheet()
             snack(getString(R.string.about_link_todo))
             return
         }

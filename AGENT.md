@@ -44,6 +44,8 @@
 11. **挖孔（displayCutout）避让只在横屏生效**：竖屏时挖孔位于顶部状态栏区域，不做横向避让。
 12. **横屏是沉浸态**：隐藏应用控件**与**系统状态栏（`WindowInsetsControllerCompat.hide(systemBars)`）；点击屏幕唤出控件并显示系统栏，5 秒后再次隐藏。竖屏始终显示系统栏。
 13. **分辨率只允许用户显式选择**（BottomSheet 列表），不做任何自动切换或轮换。
+14. **代码动态创建的 Material 控件必须与主题父级匹配**：本主题受库限制固定在 `Theme.MaterialComponents.*`，故不要用 M3 专有控件（如 `MaterialSwitch`）。实测：`MaterialSwitch` 在该主题下其 `SwitchCompat` 的 `textOn/textOff` 为 null，`onMeasure → makeLayout` 会对它们调 `length()` 而 **NPE 闪退**（`NullPointerException at SwitchCompat.makeLayout:993`）。改用 `SwitchMaterial`，并同时 `showText = false` + `textOn/textOff = ""` 作双保险。
+15. **BottomSheet 是独立窗口，Snackbar 会被它遮挡**：需要在面板内提示用户时，先 `dismissSheet()` 再 `snack(...)`。
 
 ## 5. 操作纪律
 
